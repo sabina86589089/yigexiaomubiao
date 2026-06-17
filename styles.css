@@ -216,6 +216,20 @@ button {
   margin-top: 14px;
 }
 
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.check-row input {
+  width: 18px;
+  height: 18px;
+}
+
 .primary-btn,
 .secondary-btn,
 .danger-btn {

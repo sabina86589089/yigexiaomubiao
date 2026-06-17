@@ -77,6 +77,7 @@ const defaultState = {
   activeTab: "home",
   activeProjectId: null,
   editProjectId: null,
+  editRecordId: null,
   modal: null,
   draftRecords: [],
   desktopMode: false,
@@ -169,14 +170,14 @@ function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return structuredClone(defaultState);
   try {
-    return { ...structuredClone(defaultState), ...JSON.parse(saved), activeTab: "home", modal: null, draftRecords: [] };
+    return { ...structuredClone(defaultState), ...JSON.parse(saved), activeTab: "home", modal: null, draftRecords: [], editRecordId: null };
   } catch {
     return structuredClone(defaultState);
   }
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [] }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [], editRecordId: null }));
   queueCloudSave();
 }
 
@@ -199,11 +200,12 @@ function applySnapshot(data) {
     activeTab: "home",
     activeProjectId: null,
     editProjectId: null,
+    editRecordId: null,
     modal: null,
     draftRecords: [],
     desktopMode: false,
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [] }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [], editRecordId: null }));
 }
 
 async function initCloud() {
@@ -562,6 +564,7 @@ function renderRecordCard(item) {
       </div>
       <div>
         <div class="money ${cls}">${amount}</div>
+        <button class="text-btn" data-edit-record="${item.id}">编辑</button>
         <button class="text-btn" data-delete-record="${item.id}">删除</button>
       </div>
     </article>
@@ -881,6 +884,7 @@ function renderModal() {
   if (!state.modal) return "";
   if (state.modal === "goal") return renderGoalModal();
   if (state.modal === "project") return renderProjectModal();
+  if (state.modal === "record") return renderRecordModal();
   if (state.modal === "confirm") return renderConfirmModal();
   if (state.modal === "risk") return renderRiskModal();
   return "";
@@ -916,6 +920,43 @@ function renderProjectModal() {
           <div class="field"><label>状态</label><select id="projectStatus">${projectStatuses.map((item) => `<option ${editing?.status === item ? "selected" : ""}>${item}</option>`).join("")}</select></div>
           <button class="primary-btn" data-action="save-project">${editing ? "保存修改" : "保存项目"}</button>
           ${editing ? `<button class="danger-btn" data-action="delete-project">删除项目</button>` : ""}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderRecordModal() {
+  const editing = state.records.find((item) => item.id === state.editRecordId);
+  if (!editing) return "";
+  return `
+    <div class="modal-backdrop">
+      <section class="modal">
+        <div class="modal-head"><h2>编辑记录</h2><button class="icon-btn" data-close>×</button></div>
+        <div class="form">
+          <div class="field">
+            <label>类型</label>
+            <select id="recordType">
+              <option value="income" ${editing.recordType === "income" ? "selected" : ""}>收入</option>
+              <option value="expense" ${editing.recordType === "expense" ? "selected" : ""}>支出</option>
+              <option value="action" ${editing.recordType === "action" ? "selected" : ""}>行动</option>
+            </select>
+          </div>
+          <div class="field"><label>金额</label><input id="recordAmount" type="number" value="${editing.amount || 0}" /></div>
+          <div class="field">
+            <label>项目</label>
+            <select id="recordProjectId">
+              <option value="" ${!editing.projectId ? "selected" : ""}>未关联/个人事项</option>
+              ${state.projects.map((project) => `<option value="${project.id}" ${project.id === editing.projectId ? "selected" : ""}>${project.name}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field"><label>日期</label><input id="recordDate" type="date" value="${editing.occurredAt || todayISO()}" /></div>
+          <div class="field"><label>备注</label><input id="recordNote" value="${editing.note || ""}" /></div>
+          <label class="check-row">
+            <input id="recordIncluded" type="checkbox" ${editing.includedInGoal ? "checked" : ""} />
+            <span>计入目标进度</span>
+          </label>
+          <button class="primary-btn" data-action="save-record-edit">保存记录</button>
         </div>
       </section>
     </div>
@@ -1001,6 +1042,7 @@ function bindEvents() {
       state.modal = null;
       state.draftRecords = [];
       state.editProjectId = null;
+      state.editRecordId = null;
       render();
     });
   });
@@ -1025,6 +1067,15 @@ function bindEvents() {
       event.stopPropagation();
       state.editProjectId = button.dataset.editProject;
       state.modal = "project";
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-edit-record]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.editRecordId = button.dataset.editRecord;
+      state.modal = "record";
       render();
     });
   });
@@ -1085,6 +1136,7 @@ function handleAction(action) {
   }
   if (action === "save-project") saveProject();
   if (action === "delete-project") deleteProject();
+  if (action === "save-record-edit") saveRecordEdit();
   if (action === "voice-input") startVoiceInput();
   if (action === "parse-record") parseRecord();
   if (action === "save-drafts") saveDrafts();
@@ -1262,6 +1314,33 @@ function deleteProject() {
   if (state.activeProjectId === project.id) state.activeProjectId = null;
   state.modal = null;
   state.editProjectId = null;
+  state.dailyAction = generateAction();
+  saveState();
+  render();
+}
+
+function saveRecordEdit() {
+  const recordType = document.querySelector("#recordType")?.value || "expense";
+  const amount = Number(document.querySelector("#recordAmount")?.value || 0);
+  const projectId = document.querySelector("#recordProjectId")?.value || "";
+  const occurredAt = document.querySelector("#recordDate")?.value || todayISO();
+  const note = document.querySelector("#recordNote")?.value.trim() || "无备注";
+  const included = Boolean(document.querySelector("#recordIncluded")?.checked);
+  state.records = state.records.map((item) =>
+    item.id === state.editRecordId
+      ? {
+          ...item,
+          recordType,
+          amount: recordType === "action" ? 0 : amount,
+          projectId,
+          occurredAt,
+          note,
+          includedInGoal: recordType === "income" ? included : false,
+        }
+      : item,
+  );
+  state.modal = null;
+  state.editRecordId = null;
   state.dailyAction = generateAction();
   saveState();
   render();
