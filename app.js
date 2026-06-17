@@ -1,4 +1,5 @@
 const STORAGE_KEY = "small-goals-v1";
+const RESET_BACKUP_KEY = "small-goals-reset-backup-v1";
 
 const riskWords = [
   "股票",
@@ -81,6 +82,7 @@ const defaultState = {
   modal: null,
   draftRecords: [],
   recordInputText: "",
+  recordProjectId: "",
   recordNotice: "",
   desktopMode: false,
   isPro: false,
@@ -504,6 +506,13 @@ function renderRecordPage() {
     <section class="card">
       <div class="form">
         <div class="field">
+          <label>归属项目</label>
+          <select id="recordProjectId">
+            <option value="" ${!state.recordProjectId ? "selected" : ""}>未关联/个人事项</option>
+            ${state.projects.map((project) => `<option value="${project.id}" ${project.id === state.recordProjectId ? "selected" : ""}>${project.name}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
           <label>今天发生了什么？</label>
           <textarea id="recordText" placeholder="例如：今天小红书接广收入 800，投流花了 120">${state.recordInputText || ""}</textarea>
         </div>
@@ -513,11 +522,11 @@ function renderRecordPage() {
           <button class="chip" data-example="联系了 3 个潜在客户">联系 3 个客户</button>
         </div>
         <div class="button-row">
-          <button class="secondary-btn" data-action="voice-input">语音输入</button>
+          <button class="secondary-btn" data-action="voice-input">语音/键盘输入</button>
           <button class="primary-btn" data-action="parse-record">AI 识别</button>
         </div>
         ${state.recordNotice ? `<div class="notice auth-error">${state.recordNotice}</div>` : ""}
-        <div class="notice">提示：没有明确提到项目时，会先归为“未关联”，你可以在确认卡里选择项目。</div>
+        <div class="notice">提示：先选归属项目更稳；没有明确项目时，会按这里选择的项目入账。</div>
       </div>
     </section>
 
@@ -750,6 +759,11 @@ function renderMePage() {
         <button class="secondary-btn" data-action="desktop-mode">桌面屏模式</button>
         <button class="danger-btn" data-action="reset-demo">重新开始</button>
       </div>
+      ${
+        getResetBackup()
+          ? `<div class="button-row"><button class="secondary-btn" data-action="restore-reset-backup">恢复上次重新开始前的数据</button></div>`
+          : ""
+      }
     </section>
     <section class="section card">
       <span class="pill ${cloud.configured && cloud.session ? "green" : "orange"}">${cloud.configured ? "云端数据" : "本地数据"}</span>
@@ -1082,6 +1096,14 @@ function bindEvents() {
     });
   }
 
+  const recordProject = document.querySelector("#recordProjectId");
+  if (recordProject) {
+    recordProject.addEventListener("change", () => {
+      state.recordProjectId = recordProject.value;
+      state.recordNotice = "";
+    });
+  }
+
   const backupFile = document.querySelector("#backupFile");
   if (backupFile) {
     backupFile.addEventListener("change", importBackupFile);
@@ -1158,10 +1180,9 @@ function handleAction(action) {
     render();
   }
   if (action === "reset-demo") {
-    localStorage.removeItem(STORAGE_KEY);
-    state = structuredClone(defaultState);
-    render();
+    resetAppData();
   }
+  if (action === "restore-reset-backup") restoreResetBackup();
 }
 
 function finishOnboarding() {
@@ -1351,7 +1372,7 @@ function parseRecord() {
     render();
     return;
   }
-  const drafts = parseTextToDrafts(text);
+  const drafts = parseTextToDrafts(text, state.recordProjectId);
   if (!drafts.length) {
     state.recordNotice = "这句话还没识别出收入、支出或行动。可以补充金额、项目或动作，例如“房贷支出3150”或“联系3个客户”。";
     render();
@@ -1365,51 +1386,13 @@ function parseRecord() {
 function startVoiceInput() {
   const input = document.querySelector("#recordText");
   if (!input) return;
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  input.focus();
-
-  if (!SpeechRecognition) {
-    alert("当前浏览器不支持网页语音识别。可以点输入框后使用微信/系统键盘上的麦克风语音输入。");
-    return;
-  }
-
-  const button = document.querySelector('[data-action="voice-input"]');
-  const originalText = button?.textContent || "语音输入";
-  const recognition = new SpeechRecognition();
-  recognition.lang = "zh-CN";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-
-  recognition.onstart = () => {
-    if (button) button.textContent = "正在听...";
-  };
-
-  recognition.onresult = (event) => {
-    const transcript = Array.from(event.results)
-      .map((result) => result[0]?.transcript || "")
-      .join("")
-      .trim();
-    if (!transcript) return;
-    const prefix = input.value.trim();
-    input.value = prefix ? `${prefix}，${transcript}` : transcript;
-    state.recordInputText = input.value;
-    state.recordNotice = "";
-    input.focus();
-  };
-
-  recognition.onerror = () => {
-    alert("语音识别没有成功。可以再试一次，或使用微信/系统键盘麦克风输入。");
-  };
-
-  recognition.onend = () => {
-    if (button) button.textContent = originalText;
-  };
-
-  recognition.start();
+  state.recordNotice = "已定位到输入框。手机可点键盘麦克风说话；电脑可用系统听写。网页直录转文字需要后端语音服务，当前先用系统语音输入保证稳定。";
+  render();
+  document.querySelector("#recordText")?.focus();
 }
 
-function parseTextToDrafts(text) {
-  const project = guessProject(text);
+function parseTextToDrafts(text, preferredProjectId = "") {
+  const project = guessProject(text) || getProject(preferredProjectId);
   const clauses = text
     .split(/[，,。；;、]/)
     .map((item) => item.trim())
@@ -1418,7 +1401,7 @@ function parseTextToDrafts(text) {
   const drafts = [];
 
   for (const part of parts) {
-    const hasMoneyIntent = /(收入|进账|赚|收款|到账|接广|成交|尾款|分成|花|支出|付|投流|成本|买|发了|用了|扣|亏|充值|房贷|美金|美元|usd|\$|¥|￥)/i.test(part);
+    const hasMoneyIntent = /(收入|进账|赚|收款|到账|接广|成交|尾款|分成|工资|提成|回款|销售|卖|花|花费|支出|费用|付|付款|支付|投流|成本|买|购买|发了|用了|扣|扣款|亏|充值|订阅|会员|房贷|房租|水电|物业|美金|美元|usd|\$|¥|￥)/i.test(part);
     const hasActionIntent = /(联系|发布|整理|复盘|跟进|拜访|沟通|面试|投递|客户)/.test(part);
     if (!hasMoneyIntent && hasActionIntent) continue;
     const amountMatches = [...part.matchAll(/([$￥¥])?\s*(\d+(?:\.\d{1,2})?)\s*(美金|美元|刀|usd|USD|元|块|圆)?/g)].filter((match) => {
@@ -1428,8 +1411,7 @@ function parseTextToDrafts(text) {
       return Boolean(unit) || hasMoneyIntent;
     });
     if (!amountMatches.length) continue;
-    const isExpense = /(花|支出|付|投流|成本|买|发了|用了|扣|亏)/.test(part);
-    const isIncome = /(收入|进账|赚|收款|到账|接广|成交|尾款|分成)/.test(part);
+    const recordType = classifyRecordType(part);
     amountMatches.forEach((match) => {
       const rawAmount = Number(match[2]);
       const unit = match[3] || match[1] || "";
@@ -1438,7 +1420,7 @@ function parseTextToDrafts(text) {
       const note = isUsd ? `${cleanNote(part)}（${rawAmount}美元，按 ${USD_TO_CNY} 折算）` : cleanNote(part);
       drafts.push({
         id: uid(),
-        recordType: isExpense && !isIncome ? "expense" : "income",
+        recordType,
         amount,
         originalAmount: rawAmount,
         currency: isUsd ? "USD" : "CNY",
@@ -1447,7 +1429,7 @@ function parseTextToDrafts(text) {
         note,
         sourceText: text,
         occurredAt: todayISO(),
-        includedInGoal: !(isExpense && !isIncome),
+        includedInGoal: recordType === "income",
         aiConfidence: 0.82,
       });
     });
@@ -1473,6 +1455,21 @@ function parseTextToDrafts(text) {
     ];
   }
   return [];
+}
+
+function classifyRecordType(text) {
+  const incomeWords = /(收入|进账|赚|赚了|收款|收到|到账|接广|成交|尾款|分成|工资|提成|回款|销售|卖出|卖了|客户付|客户付款)/;
+  const expenseWords = /(花|花了|花费|支出|费用|成本|付|付款|支付|投流|买|购买|发了|用了|扣|扣款|亏|充值|订阅|会员|房贷|房租|水电|物业|运费|服务费|手续费|采购|进货)/;
+  const hasIncome = incomeWords.test(text);
+  const hasExpense = expenseWords.test(text);
+  if (hasExpense && !hasIncome) return "expense";
+  if (hasIncome && !hasExpense) return "income";
+  if (hasExpense && hasIncome) {
+    const firstExpense = text.search(expenseWords);
+    const firstIncome = text.search(incomeWords);
+    return firstExpense >= 0 && firstIncome >= 0 && firstExpense < firstIncome ? "expense" : "income";
+  }
+  return "expense";
 }
 
 function guessProject(text) {
@@ -1624,6 +1621,47 @@ function importBackupFile(event) {
     }
   };
   reader.readAsText(file);
+}
+
+function getResetBackup() {
+  try {
+    const payload = JSON.parse(localStorage.getItem(RESET_BACKUP_KEY) || "null");
+    if (!payload?.data?.goal || !Array.isArray(payload.data.projects) || !Array.isArray(payload.data.records)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function resetAppData() {
+  const ok = confirm("重新开始会清空当前目标、项目和记录。系统会先保存一份本机恢复备份，仍然建议你先导出完整备份。确定继续吗？");
+  if (!ok) return;
+  localStorage.setItem(
+    RESET_BACKUP_KEY,
+    JSON.stringify({
+      createdAt: new Date().toISOString(),
+      data: snapshotState(),
+    }),
+  );
+  state = structuredClone(defaultState);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [], editRecordId: null }));
+  queueCloudSave();
+  alert("已重新开始。本机已保留一份恢复备份，可在“我的”里恢复。");
+  render();
+}
+
+function restoreResetBackup() {
+  const backup = getResetBackup();
+  if (!backup) {
+    alert("没有找到可恢复的数据。");
+    return;
+  }
+  const ok = confirm("确定恢复到上次重新开始前的数据吗？当前未备份的数据会被覆盖。");
+  if (!ok) return;
+  applySnapshot(backup.data);
+  saveState();
+  alert("已恢复上次重新开始前的数据。");
+  render();
 }
 
 async function copyShareLink() {
