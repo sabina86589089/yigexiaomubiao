@@ -22,6 +22,44 @@ const riskWords = [
 
 const projectTypes = ["内容/IP", "接单服务", "咨询", "电商", "私域", "实体小生意", "其他"];
 const projectStatuses = ["验证中", "增长中", "暂缓", "已结束"];
+const startTemplates = {
+  side: {
+    label: "副业变现",
+    projects: [
+      ["小红书接广", "内容/IP"],
+      ["咨询服务", "咨询"],
+      ["私域成交", "私域"],
+    ],
+  },
+  freelance: {
+    label: "自由职业",
+    projects: [
+      ["客户线索", "接单服务"],
+      ["交付项目", "接单服务"],
+      ["老客户复购", "咨询"],
+    ],
+  },
+  business: {
+    label: "小生意经营",
+    projects: [
+      ["门店收入", "实体小生意"],
+      ["线上获客", "私域"],
+      ["成本控制", "实体小生意"],
+    ],
+  },
+  career: {
+    label: "求职/成长",
+    projects: [
+      ["AI应用产品经理求职", "其他"],
+      ["作品集项目", "其他"],
+      ["面试跟进", "其他"],
+    ],
+  },
+  blank: {
+    label: "空白开始",
+    projects: [["第一个赚钱项目", "其他"]],
+  },
+};
 const config = window.YGXMB_CONFIG || {};
 const cloud = {
   configured: Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY && window.supabase),
@@ -700,6 +738,15 @@ function renderMePage() {
         <button class="secondary-btn" data-action="export-csv">导出数据</button>
       </div>
       <div class="button-row">
+        <button class="secondary-btn" data-action="export-backup">完整备份</button>
+        <button class="secondary-btn" data-action="import-backup">导入备份</button>
+      </div>
+      <div class="button-row">
+        <button class="secondary-btn" data-action="copy-share-link">复制分享链接</button>
+        <button class="secondary-btn" data-action="send-feedback">反馈建议</button>
+      </div>
+      <input id="backupFile" type="file" accept="application/json,.json" hidden />
+      <div class="button-row">
         <button class="secondary-btn" data-action="desktop-mode">桌面屏模式</button>
         <button class="danger-btn" data-action="reset-demo">重置演示</button>
       </div>
@@ -772,7 +819,13 @@ function renderOnboarding() {
             <input id="onboardInitial" type="number" value="0" min="0" />
           </div>
           <div class="field">
-            <label>第一个赚钱项目</label>
+            <label>起步模板</label>
+            <select id="onboardTemplate">
+              ${Object.entries(startTemplates).map(([key, item]) => `<option value="${key}">${item.label}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label>第一个项目名称</label>
             <input id="onboardProject" value="小红书接广" />
           </div>
           <button class="primary-btn" data-action="finish-onboarding">开始我的作战台</button>
@@ -956,10 +1009,24 @@ function bindEvents() {
     });
   });
 
+  const backupFile = document.querySelector("#backupFile");
+  if (backupFile) {
+    backupFile.addEventListener("change", importBackupFile);
+  }
+
   document.querySelectorAll("[data-draft]").forEach((input) => {
     input.addEventListener("input", () => updateDraft(input));
     input.addEventListener("change", () => updateDraft(input));
   });
+
+  const onboardTemplate = document.querySelector("#onboardTemplate");
+  if (onboardTemplate) {
+    onboardTemplate.addEventListener("change", () => {
+      const projectInput = document.querySelector("#onboardProject");
+      const template = startTemplates[onboardTemplate.value];
+      if (projectInput && template) projectInput.value = template.projects[0][0];
+    });
+  }
 
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleAction(button.dataset.action));
@@ -997,6 +1064,13 @@ function handleAction(action) {
   }
   if (action === "unlock-pro") unlockPro();
   if (action === "export-csv") exportCsv();
+  if (action === "export-backup") exportBackup();
+  if (action === "import-backup") {
+    const input = document.querySelector("#backupFile");
+    if (input) input.click();
+  }
+  if (action === "copy-share-link") copyShareLink();
+  if (action === "send-feedback") sendFeedback();
   if (action === "back-projects") {
     state.activeProjectId = null;
     render();
@@ -1013,10 +1087,18 @@ function finishOnboarding() {
   const deadline = document.querySelector("#onboardDeadline").value || "2026-12-31";
   const initial = Number(document.querySelector("#onboardInitial").value || 0);
   const projectName = document.querySelector("#onboardProject").value.trim() || "第一个赚钱项目";
-  const projectId = uid();
+  const templateKey = document.querySelector("#onboardTemplate")?.value || "side";
+  const template = startTemplates[templateKey] || startTemplates.side;
+  const projects = template.projects.map(([name, type], index) => ({
+    id: uid(),
+    name: index === 0 ? projectName : name,
+    type,
+    status: "验证中",
+    description: "",
+  }));
   state.hasOnboarded = true;
   state.goal = { ...state.goal, targetAmount: target, initialAmount: initial, deadline };
-  state.projects = [{ id: projectId, name: projectName, type: "内容/IP", status: "验证中", description: "" }];
+  state.projects = projects;
   state.records = [];
   state.dailyAction = {
     text: "记录今天的一笔收入、支出或行动",
@@ -1253,6 +1335,71 @@ function exportCsv() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadText(filename, text, type = "application/json;charset=utf-8") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportBackup() {
+  const payload = {
+    product: "亿个小目标",
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    data: snapshotState(),
+  };
+  downloadText(`亿个小目标备份_${todayISO().replaceAll("-", "")}.json`, JSON.stringify(payload, null, 2));
+}
+
+function importBackupFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const payload = JSON.parse(String(reader.result || "{}"));
+      const data = payload.data || payload;
+      if (!data.goal || !Array.isArray(data.projects) || !Array.isArray(data.records)) {
+        alert("备份文件格式不正确。");
+        return;
+      }
+      applySnapshot(data);
+      saveState();
+      alert("导入成功。");
+      render();
+    } catch (error) {
+      alert(`导入失败：${error.message}`);
+    } finally {
+      event.target.value = "";
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function copyShareLink() {
+  const url = "https://sabina86589089.github.io/yigexiaomubiao/";
+  try {
+    await navigator.clipboard.writeText(url);
+    alert("已复制分享链接。");
+  } catch {
+    prompt("复制这个链接发给朋友：", url);
+  }
+}
+
+function sendFeedback() {
+  const subject = encodeURIComponent("亿个小目标内测反馈");
+  const body = encodeURIComponent(
+    `我在使用亿个小目标时的反馈：\n\n1. 最有用的地方：\n\n2. 最卡的地方：\n\n3. 我希望增加：\n\n当前记录数：${state.records.length}\n项目数：${state.projects.length}`,
+  );
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
 
 function completeAction() {
