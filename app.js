@@ -22,6 +22,16 @@ const riskWords = [
 
 const projectTypes = ["内容/IP", "接单服务", "咨询", "电商", "私域", "实体小生意", "其他"];
 const projectStatuses = ["验证中", "增长中", "暂缓", "已结束"];
+const config = window.YGXMB_CONFIG || {};
+const cloud = {
+  configured: Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY && window.supabase),
+  client: null,
+  session: null,
+  checked: false,
+  syncing: false,
+  error: "",
+  saveTimer: null,
+};
 
 const defaultState = {
   hasOnboarded: false,
@@ -127,6 +137,91 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [] }));
+  queueCloudSave();
+}
+
+function snapshotState() {
+  return {
+    hasOnboarded: state.hasOnboarded,
+    isPro: state.isPro,
+    goal: state.goal,
+    projects: state.projects,
+    records: state.records,
+    dailyAction: state.dailyAction,
+  };
+}
+
+function applySnapshot(data) {
+  if (!data || typeof data !== "object") return;
+  state = {
+    ...state,
+    ...data,
+    activeTab: "home",
+    activeProjectId: null,
+    modal: null,
+    draftRecords: [],
+    desktopMode: false,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [] }));
+}
+
+async function initCloud() {
+  if (!cloud.configured) {
+    cloud.checked = true;
+    render();
+    return;
+  }
+  try {
+    cloud.client = window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
+    const { data } = await cloud.client.auth.getSession();
+    cloud.session = data.session;
+    cloud.checked = true;
+    if (cloud.session) await loadCloudState();
+  } catch (error) {
+    cloud.error = `云端连接失败：${error.message}`;
+    cloud.checked = true;
+  }
+  render();
+}
+
+async function loadCloudState() {
+  if (!cloud.client || !cloud.session) return;
+  cloud.syncing = true;
+  render();
+  const { data, error } = await cloud.client
+    .from("app_states")
+    .select("data")
+    .eq("user_id", cloud.session.user.id)
+    .maybeSingle();
+  if (error) {
+    cloud.error = `读取云端数据失败：${error.message}`;
+  } else if (data?.data && Object.keys(data.data).length) {
+    applySnapshot(data.data);
+  } else {
+    await uploadCloudState();
+  }
+  cloud.syncing = false;
+}
+
+function queueCloudSave() {
+  if (!cloud.configured || !cloud.session || !cloud.client) return;
+  clearTimeout(cloud.saveTimer);
+  cloud.saveTimer = setTimeout(() => {
+    uploadCloudState();
+  }, 500);
+}
+
+async function uploadCloudState() {
+  if (!cloud.configured || !cloud.session || !cloud.client) return;
+  cloud.syncing = true;
+  const payload = {
+    user_id: cloud.session.user.id,
+    data: snapshotState(),
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await cloud.client.from("app_states").upsert(payload, { onConflict: "user_id" });
+  if (error) cloud.error = `同步失败：${error.message}`;
+  cloud.syncing = false;
 }
 
 function money(value) {
@@ -202,6 +297,15 @@ function sumByType(records, type) {
 
 function render() {
   const app = document.querySelector("#app");
+  if (cloud.configured && !cloud.checked) {
+    app.innerHTML = renderLoadingPage("正在连接云端数据...");
+    return;
+  }
+  if (cloud.configured && !cloud.session) {
+    app.innerHTML = renderAuthPage();
+    bindEvents();
+    return;
+  }
   if (!state.hasOnboarded) {
     app.innerHTML = renderOnboarding();
     bindEvents();
@@ -232,11 +336,58 @@ function renderCurrentPage() {
   return renderHomePage();
 }
 
+function renderLoadingPage(text) {
+  return `
+    <main class="onboarding">
+      <section class="card">
+        <div class="brand">亿</div>
+        <div class="eyebrow">AI 赚钱目标作战台</div>
+        <h1 class="title">${text}</h1>
+        <p class="hero-sub">正在准备你的个人数据空间。</p>
+      </section>
+    </main>
+  `;
+}
+
+function renderAuthPage() {
+  return `
+    <main class="onboarding">
+      <section class="card">
+        <div class="brand">亿</div>
+        <div class="eyebrow">云端内测版</div>
+        <h1 class="title">登录你的赚钱作战台</h1>
+        <p class="hero-sub">登录后，你的目标、项目和记录会保存到云端。别人注册后也会拥有自己的独立数据。</p>
+        ${cloud.error ? `<div class="notice auth-error">${cloud.error}</div>` : ""}
+        <div class="form section">
+          <div class="field">
+            <label>邮箱</label>
+            <input id="authEmail" type="email" placeholder="you@example.com" />
+          </div>
+          <div class="field">
+            <label>密码</label>
+            <input id="authPassword" type="password" placeholder="至少 6 位" />
+          </div>
+          <button class="primary-btn" data-action="auth-login">登录</button>
+          <button class="secondary-btn" data-action="auth-signup">注册并开始</button>
+          <div class="notice">AI 内容仅供记录和复盘参考，不承诺任何收入结果。</div>
+        </div>
+      </section>
+    </main>
+  `;
+}
+
 function renderTopbar(title, eyebrow = "亿个小目标") {
+  const syncText = cloud.configured
+    ? cloud.session
+      ? cloud.syncing
+        ? "云端同步中"
+        : "云端已开启"
+      : "未登录"
+    : "本地模式";
   return `
     <div class="topbar">
       <div>
-        <div class="eyebrow">${eyebrow}</div>
+        <div class="eyebrow">${eyebrow} · ${syncText}</div>
         <h1 class="title">${title}</h1>
       </div>
       <button class="icon-btn" data-open="goal" aria-label="设置目标">⚙</button>
@@ -553,6 +704,16 @@ function renderMePage() {
         <button class="danger-btn" data-action="reset-demo">重置演示</button>
       </div>
     </section>
+    <section class="section card">
+      <span class="pill ${cloud.configured && cloud.session ? "green" : "orange"}">${cloud.configured ? "云端数据" : "本地数据"}</span>
+      <div class="action-text">${cloud.configured && cloud.session ? "已登录云端账号" : "当前为本地模式"}</div>
+      <div class="hero-sub">${cloud.session?.user?.email || "配置 Supabase 后可开启多人云端数据。"}</div>
+      ${
+        cloud.configured && cloud.session
+          ? `<div class="button-row"><button class="secondary-btn" data-action="sync-now">立即同步</button><button class="danger-btn" data-action="auth-logout">退出登录</button></div>`
+          : ""
+      }
+    </section>
     <section class="section notice">
       AI 生成内容仅供记录和复盘参考，不构成投资、理财、法律、税务、职业或创业成功建议。请结合自身情况独立判断。
     </section>
@@ -813,6 +974,10 @@ function updateDraft(input) {
 }
 
 function handleAction(action) {
+  if (action === "auth-login") signIn();
+  if (action === "auth-signup") signUp();
+  if (action === "auth-logout") signOut();
+  if (action === "sync-now") syncNow();
   if (action === "finish-onboarding") finishOnboarding();
   if (action === "save-goal") saveGoal();
   if (action === "save-project") saveProject();
@@ -860,6 +1025,67 @@ function finishOnboarding() {
     status: "pending",
   };
   saveState();
+  render();
+}
+
+function getAuthFields() {
+  return {
+    email: document.querySelector("#authEmail")?.value.trim(),
+    password: document.querySelector("#authPassword")?.value,
+  };
+}
+
+async function signIn() {
+  if (!cloud.client) return;
+  const { email, password } = getAuthFields();
+  if (!email || !password) {
+    cloud.error = "请输入邮箱和密码。";
+    render();
+    return;
+  }
+  const { data, error } = await cloud.client.auth.signInWithPassword({ email, password });
+  if (error) {
+    cloud.error = error.message;
+    render();
+    return;
+  }
+  cloud.error = "";
+  cloud.session = data.session;
+  await loadCloudState();
+  render();
+}
+
+async function signUp() {
+  if (!cloud.client) return;
+  const { email, password } = getAuthFields();
+  if (!email || !password || password.length < 6) {
+    cloud.error = "请输入邮箱，并设置至少 6 位密码。";
+    render();
+    return;
+  }
+  const { data, error } = await cloud.client.auth.signUp({ email, password });
+  if (error) {
+    cloud.error = error.message;
+    render();
+    return;
+  }
+  cloud.error = "";
+  cloud.session = data.session;
+  if (cloud.session) await uploadCloudState();
+  render();
+}
+
+async function signOut() {
+  if (!cloud.client) return;
+  await uploadCloudState();
+  await cloud.client.auth.signOut();
+  cloud.session = null;
+  state = loadState();
+  render();
+}
+
+async function syncNow() {
+  await uploadCloudState();
   render();
 }
 
@@ -1060,4 +1286,4 @@ function generateAction() {
   };
 }
 
-render();
+initCloud();

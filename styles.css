@@ -455,6 +455,13 @@ button {
   font-size: 12px;
 }
 
+.auth-error {
+  background: var(--red-soft);
+  border-color: #fecaca;
+  color: #b91c1c;
+  margin-top: 14px;
+}
+
 .empty {
   border: 1px dashed #cbd5e1;
   background: #fff;
