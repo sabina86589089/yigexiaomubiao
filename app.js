@@ -1,0 +1,1063 @@
+const STORAGE_KEY = "small-goals-v1";
+
+const riskWords = [
+  "股票",
+  "基金",
+  "期货",
+  "比特币",
+  "炒币",
+  "杠杆",
+  "借钱",
+  "贷款",
+  "辞职",
+  "加盟",
+  "囤货",
+  "博彩",
+  "赌博",
+  "梭哈",
+  "保证赚钱",
+  "稳赚",
+  "翻倍",
+];
+
+const projectTypes = ["内容/IP", "接单服务", "咨询", "电商", "私域", "实体小生意", "其他"];
+const projectStatuses = ["验证中", "增长中", "暂缓", "已结束"];
+
+const defaultState = {
+  hasOnboarded: false,
+  activeTab: "home",
+  activeProjectId: null,
+  modal: null,
+  draftRecords: [],
+  desktopMode: false,
+  isPro: false,
+  goal: {
+    name: "第一个 100 万",
+    targetAmount: 1000000,
+    initialAmount: 83520,
+    deadline: "2026-12-31",
+    weeklyHours: 8,
+    riskPreference: "稳健",
+  },
+  projects: [
+    {
+      id: uid(),
+      name: "小红书接广",
+      type: "内容/IP",
+      status: "增长中",
+      description: "内容账号商业化",
+    },
+    {
+      id: uid(),
+      name: "咨询服务",
+      type: "咨询",
+      status: "验证中",
+      description: "个人经验产品化",
+    },
+    {
+      id: uid(),
+      name: "视频号",
+      type: "内容/IP",
+      status: "验证中",
+      description: "短视频流量测试",
+    },
+  ],
+  records: [],
+  dailyAction: {
+    text: "联系 3 个上周咨询过的潜在客户",
+    projectName: "咨询服务",
+    estimatedMinutes: 30,
+    status: "pending",
+  },
+};
+
+defaultState.records = seedRecords(defaultState.projects);
+
+let state = loadState();
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function seedRecords(projects) {
+  const xhs = projects[0].id;
+  const consult = projects[1].id;
+  const video = projects[2].id;
+  return [
+    record("income", 800, xhs, "接广收入", -1, true),
+    record("income", 1200, xhs, "品牌合作尾款", -3, true),
+    record("expense", 200, xhs, "样品与拍摄道具", -2, false),
+    record("income", 680, consult, "老客户咨询", -4, true),
+    record("expense", 120, video, "投流测试", -2, false),
+    record("income", 40, video, "小额分成", -1, true),
+    { ...record("action", 0, consult, "联系了 5 个潜在客户", -1, false), actionCount: 5, actionUnit: "人" },
+  ];
+}
+
+function record(type, amount, projectId, note, daysOffset, included) {
+  const date = new Date();
+  date.setDate(date.getDate() + daysOffset);
+  return {
+    id: uid(),
+    recordType: type,
+    amount,
+    projectId,
+    note,
+    sourceText: note,
+    occurredAt: date.toISOString().slice(0, 10),
+    includedInGoal: included,
+    aiConfidence: 0.86,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function loadState() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (!saved) return structuredClone(defaultState);
+  try {
+    return { ...structuredClone(defaultState), ...JSON.parse(saved), activeTab: "home", modal: null, draftRecords: [] };
+  } catch {
+    return structuredClone(defaultState);
+  }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, modal: null, draftRecords: [] }));
+}
+
+function money(value) {
+  return `¥${Math.round(value || 0).toLocaleString("zh-CN")}`;
+}
+
+function percent(value) {
+  if (!Number.isFinite(value)) return "0%";
+  return `${Math.max(0, Math.min(999, value)).toFixed(value < 10 ? 1 : 0)}%`;
+}
+
+function getProject(id) {
+  return state.projects.find((project) => project.id === id);
+}
+
+function getStats() {
+  const goalIncome = state.records
+    .filter((item) => item.recordType === "income" && item.includedInGoal)
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const completed = Number(state.goal.initialAmount || 0) + goalIncome;
+  const remaining = Math.max(0, Number(state.goal.targetAmount || 0) - completed);
+  const progress = Number(state.goal.targetAmount || 0) ? (completed / Number(state.goal.targetAmount)) * 100 : 0;
+
+  const weekRecords = getWeekRecords();
+  const weekIncome = sumByType(weekRecords, "income");
+  const weekExpense = sumByType(weekRecords, "expense");
+  const weekNet = weekIncome - weekExpense;
+
+  const projectStats = state.projects
+    .map((project) => {
+      const records = state.records.filter((item) => item.projectId === project.id);
+      const week = weekRecords.filter((item) => item.projectId === project.id);
+      const income = sumByType(records, "income");
+      const expense = sumByType(records, "expense");
+      const weekIncome = sumByType(week, "income");
+      const weekExpense = sumByType(week, "expense");
+      return {
+        ...project,
+        income,
+        expense,
+        net: income - expense,
+        weekIncome,
+        weekExpense,
+        weekNet: weekIncome - weekExpense,
+        actions: records.filter((item) => item.recordType === "action").length,
+      };
+    })
+    .sort((a, b) => b.weekNet - a.weekNet);
+
+  return {
+    completed,
+    remaining,
+    progress,
+    weekIncome,
+    weekExpense,
+    weekNet,
+    projectStats,
+    bestProject: projectStats[0],
+  };
+}
+
+function getWeekRecords() {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  return state.records.filter((item) => new Date(item.occurredAt) >= start);
+}
+
+function sumByType(records, type) {
+  return records.filter((item) => item.recordType === type).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+}
+
+function render() {
+  const app = document.querySelector("#app");
+  if (!state.hasOnboarded) {
+    app.innerHTML = renderOnboarding();
+    bindEvents();
+    return;
+  }
+
+  if (state.desktopMode) {
+    app.innerHTML = renderDesktopMode();
+    bindEvents();
+    return;
+  }
+
+  app.innerHTML = `
+    <main class="app-shell">
+      ${renderCurrentPage()}
+    </main>
+    ${renderBottomNav()}
+    ${renderModal()}
+  `;
+  bindEvents();
+}
+
+function renderCurrentPage() {
+  if (state.activeTab === "record") return renderRecordPage();
+  if (state.activeTab === "projects") return renderProjectsPage();
+  if (state.activeTab === "review") return renderReviewPage();
+  if (state.activeTab === "me") return renderMePage();
+  return renderHomePage();
+}
+
+function renderTopbar(title, eyebrow = "亿个小目标") {
+  return `
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">${eyebrow}</div>
+        <h1 class="title">${title}</h1>
+      </div>
+      <button class="icon-btn" data-open="goal" aria-label="设置目标">⚙</button>
+    </div>
+  `;
+}
+
+function renderHomePage() {
+  const stats = getStats();
+  const monthNeed = getMonthlyNeed(stats.remaining);
+  return `
+    ${renderTopbar("今天继续盯住目标")}
+
+    <section class="card hero-card">
+      <div class="hero-label">距离你的 ${shortAmount(state.goal.targetAmount)} 目标，还差</div>
+      <div class="hero-number">${money(stats.remaining)}</div>
+      <div class="hero-sub">已完成 ${money(stats.completed)} / ${money(state.goal.targetAmount)} · 截止 ${state.goal.deadline}</div>
+      <div class="progress"><div class="progress-bar" style="width:${Math.min(100, stats.progress)}%"></div></div>
+      <div class="hero-sub">${progressCopy(stats.progress)} 本月建议盯住 ${money(monthNeed)} 的收入进展。</div>
+      <div class="stats-row">
+        <div class="mini-stat"><span>完成度</span><strong>${percent(stats.progress)}</strong></div>
+        <div class="mini-stat"><span>本周净收益</span><strong>${money(stats.weekNet)}</strong></div>
+        <div class="mini-stat"><span>最佳项目</span><strong>${stats.bestProject?.name || "暂无"}</strong></div>
+      </div>
+      <div class="button-row">
+        <button class="secondary-btn" data-action="desktop-mode">桌面屏模式</button>
+      </div>
+    </section>
+
+    <section class="section card action-card">
+      <span class="pill orange">今日行动</span>
+      <div class="action-text">${state.dailyAction.text}</div>
+      <div class="hero-sub">预计 ${state.dailyAction.estimatedMinutes} 分钟 · ${state.dailyAction.projectName || "未关联项目"}</div>
+      <div class="button-row">
+        <button class="primary-btn" data-action="complete-action">${state.dailyAction.status === "completed" ? "已完成" : "完成"}</button>
+        <button class="secondary-btn" data-action="refresh-action">换一个</button>
+      </div>
+    </section>
+
+    <section class="section card quick-card">
+      <div>
+        <strong>今天发生了什么？</strong>
+        <p>用一句话记录收入、支出或行动。</p>
+      </div>
+      <button data-tab="record">记一笔</button>
+    </section>
+
+    <div class="section-head">
+      <h2 class="section-title">本周战况</h2>
+      <button class="text-btn" data-tab="review">看复盘</button>
+    </div>
+    <section class="card">
+      <div class="grid-3">
+        <div class="metric"><span>收入</span><strong class="money positive">${money(stats.weekIncome)}</strong></div>
+        <div class="metric"><span>支出</span><strong class="money negative">${money(stats.weekExpense)}</strong></div>
+        <div class="metric"><span>净收益</span><strong>${money(stats.weekNet)}</strong></div>
+      </div>
+    </section>
+
+    <div class="section-head">
+      <h2 class="section-title">项目表现</h2>
+      <button class="text-btn" data-tab="projects">全部</button>
+    </div>
+    <div class="project-list">
+      ${stats.projectStats.slice(0, 3).map(renderProjectCard).join("") || `<div class="empty">先创建第一个赚钱项目。</div>`}
+    </div>
+  `;
+}
+
+function shortAmount(value) {
+  if (value >= 10000) return `${Math.round(value / 10000)}万`;
+  return money(value);
+}
+
+function progressCopy(progress) {
+  if (state.records.length < 3) return "记录还不够多，先连续记录 7 天。";
+  if (progress >= 60) return "当前进度基本健康，继续保持记录和复盘。";
+  if (progress >= 20) return "当前进度需要持续观察。";
+  return "当前进度略落后，建议优先推进已有成交线索。";
+}
+
+function getMonthlyNeed(remaining) {
+  const deadline = new Date(state.goal.deadline);
+  const now = new Date();
+  const months = Math.max(1, (deadline.getFullYear() - now.getFullYear()) * 12 + deadline.getMonth() - now.getMonth());
+  return remaining / months;
+}
+
+function renderRecordPage() {
+  const records = [...state.records].sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
+  return `
+    ${renderTopbar("记录进展", "10 秒记一笔")}
+    <section class="card">
+      <div class="form">
+        <div class="field">
+          <label>今天发生了什么？</label>
+          <textarea id="recordText" placeholder="例如：今天小红书接广收入 800，投流花了 120"></textarea>
+        </div>
+        <div class="chips">
+          <button class="chip" data-example="今天小红书接广收入 800">收入 800</button>
+          <button class="chip" data-example="视频号投流花了 120">支出 120</button>
+          <button class="chip" data-example="联系了 3 个潜在客户">联系 3 个客户</button>
+        </div>
+        <button class="primary-btn" data-action="parse-record">AI 识别</button>
+      </div>
+    </section>
+
+    <div class="section-head">
+      <h2 class="section-title">最近记录</h2>
+    </div>
+    <div class="record-list">
+      ${records.map(renderRecordCard).join("") || `<div class="empty">还没有记录。先记下今天的一点进展。</div>`}
+    </div>
+  `;
+}
+
+function renderRecordCard(item) {
+  const project = getProject(item.projectId);
+  const typeText = item.recordType === "income" ? "收入" : item.recordType === "expense" ? "支出" : "行动";
+  const amount = item.recordType === "action" ? `${item.actionCount || 1}${item.actionUnit || "次"}` : money(item.amount);
+  const cls = item.recordType === "income" ? "positive" : item.recordType === "expense" ? "negative" : "";
+  return `
+    <article class="card record-card">
+      <div>
+        <div class="record-title">${typeText} · ${project?.name || "未关联项目"}</div>
+        <div class="record-note">${item.note || "无备注"} · ${item.occurredAt}</div>
+      </div>
+      <div>
+        <div class="money ${cls}">${amount}</div>
+        <button class="text-btn" data-delete-record="${item.id}">删除</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderProjectsPage() {
+  const stats = getStats().projectStats;
+  if (state.activeProjectId) {
+    const project = stats.find((item) => item.id === state.activeProjectId);
+    return renderProjectDetail(project);
+  }
+  return `
+    ${renderTopbar("赚钱项目", "哪个项目值得继续")}
+    <div class="tabs">
+      <button class="tab active">本周净收益</button>
+      <button class="tab">累计净收益</button>
+      <button class="tab">ROI</button>
+    </div>
+    <div class="project-list">
+      ${stats.map(renderProjectCard).join("")}
+    </div>
+    <div class="section">
+      <button class="primary-btn" data-open="project">新建项目</button>
+    </div>
+  `;
+}
+
+function renderProjectCard(project) {
+  const roi = project.expense > 0 ? `${Math.round((project.net / project.expense) * 100)}%` : "暂无成本";
+  return `
+    <article class="card project-card" data-project="${project.id}">
+      <div class="project-top">
+        <div>
+          <div class="project-name">${project.name}</div>
+          <div class="project-meta">${project.type} · ${project.status}</div>
+        </div>
+        <span class="pill ${project.weekNet >= 0 ? "green" : "orange"}">${project.weekNet >= 0 ? "净收益" : "需观察"}</span>
+      </div>
+      <div class="grid-3">
+        <div class="metric"><span>本周</span><strong class="money ${project.weekNet >= 0 ? "positive" : "negative"}">${money(project.weekNet)}</strong></div>
+        <div class="metric"><span>累计</span><strong>${money(project.net)}</strong></div>
+        <div class="metric"><span>ROI</span><strong>${roi}</strong></div>
+      </div>
+    </article>
+  `;
+}
+
+function renderProjectDetail(project) {
+  if (!project) {
+    state.activeProjectId = null;
+    return renderProjectsPage();
+  }
+  const records = state.records.filter((item) => item.projectId === project.id);
+  return `
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">${project.type} · ${project.status}</div>
+        <h1 class="title">${project.name}</h1>
+      </div>
+      <button class="icon-btn" data-action="back-projects">←</button>
+    </div>
+    <section class="card">
+      <div class="grid-3">
+        <div class="metric"><span>本周收入</span><strong class="money positive">${money(project.weekIncome)}</strong></div>
+        <div class="metric"><span>本周支出</span><strong class="money negative">${money(project.weekExpense)}</strong></div>
+        <div class="metric"><span>本周净收益</span><strong>${money(project.weekNet)}</strong></div>
+      </div>
+    </section>
+    <section class="section card">
+      <span class="pill blue">AI 项目复盘</span>
+      <p class="review-block">${projectInsight(project)}</p>
+      <div class="notice">以下内容仅基于你记录的数据生成，供复盘参考。</div>
+    </section>
+    <div class="section-head"><h2 class="section-title">项目记录</h2></div>
+    <div class="record-list">
+      ${records.map(renderRecordCard).join("") || `<div class="empty">这个项目还没有记录。</div>`}
+    </div>
+  `;
+}
+
+function projectInsight(project) {
+  if (project.weekNet > 1000) {
+    return `这个项目本周净收益最高，但收入样本仍然有限。下周可以先联系 3 个相似客户，测试复购或转介绍机会。`;
+  }
+  if (project.weekNet < 0) {
+    return `这个项目本周为负收益。建议先复盘支出来源和转化路径，暂停没有明确回报的新增成本。`;
+  }
+  return `这个项目还在验证期。建议继续做低成本动作，至少记录 7 天后再判断是否加大投入。`;
+}
+
+function renderReviewPage() {
+  const review = buildReview();
+  if (!state.isPro) return renderFreeReviewPage(review);
+  return `
+    ${renderTopbar("AI 周复盘", "看清下周重点")}
+    <section class="card review">
+      <div class="review-block">
+        <h3>1. 本周发生了什么</h3>
+        <p>${review.summary}</p>
+      </div>
+      <div class="review-block">
+        <h3>2. 表现最好</h3>
+        <p>${review.best}</p>
+      </div>
+      <div class="review-block">
+        <h3>3. 需要警惕</h3>
+        <p>${review.watch}</p>
+      </div>
+      <div class="review-block">
+        <h3>4. 下周行动参考</h3>
+        <ul>${review.actions.map((item, index) => `<li>${item} <button class="text-btn" data-set-action="${index}">设为今日行动</button></li>`).join("")}</ul>
+      </div>
+      <div class="notice">以上内容基于你记录的数据生成，仅供复盘参考，不构成收益承诺或投资建议。</div>
+    </section>
+    <section class="section card">
+      <span class="pill green">Pro 已开启</span>
+      <div class="action-text">继续记录 7 天，复盘会更准</div>
+      <div class="hero-sub">样本越多，项目判断和行动参考越稳定。</div>
+    </section>
+  `;
+}
+
+function renderFreeReviewPage(review) {
+  const stats = getStats();
+  return `
+    ${renderTopbar("AI 周复盘", "看清下周重点")}
+    <section class="card review">
+      <div class="review-block">
+        <h3>本周简报</h3>
+        <p>收入 ${money(stats.weekIncome)}，支出 ${money(stats.weekExpense)}，净收益 ${money(stats.weekNet)}。表现最好：${stats.bestProject?.name || "暂无"}。</p>
+      </div>
+      <div class="notice">免费版展示简报。完整复盘包含项目警惕、目标进度变化和下周行动参考。</div>
+    </section>
+    <section class="section card">
+      <span class="pill orange">Pro 付费点</span>
+      <div class="action-text">解锁完整 AI 周复盘</div>
+      <div class="hero-sub">看清本周哪个项目最有效，下周该优先推进什么。</div>
+      <div class="button-row">
+        <button class="primary-btn" data-action="unlock-pro">内测开通 Pro</button>
+      </div>
+      <div class="notice">AI 复盘仅供参考，不承诺任何收入或商业结果。</div>
+    </section>
+  `;
+}
+
+function buildReview() {
+  const stats = getStats();
+  const best = stats.bestProject;
+  const watch = [...stats.projectStats].sort((a, b) => a.weekNet - b.weekNet)[0];
+  const summary = `本周你共记录 ${getWeekRecords().length} 次，收入 ${money(stats.weekIncome)}，支出 ${money(stats.weekExpense)}，净收益 ${money(stats.weekNet)}。`;
+  const bestText = best
+    ? `${best.name} 本周净收益 ${money(best.weekNet)}。如果这个收入来自少数订单，建议继续验证复购和转介绍。`
+    : "记录还不够多，暂时无法判断最佳项目。";
+  const watchText =
+    watch && watch.weekNet < 0
+      ? `${watch.name} 本周净收益为 ${money(watch.weekNet)}。建议先复盘成本来源，暂停无明确回报的新增投入。`
+      : "暂时没有明显亏损项目，但样本量有限，继续记录一周会更准确。";
+  const projectName = best?.name || state.projects[0]?.name || "当前项目";
+  return {
+    summary,
+    best: bestText,
+    watch: watchText,
+    actions: [
+      `围绕 ${projectName} 联系 3 个潜在客户或相似品牌。`,
+      "整理 1 个最近的成交案例，发布成内容或发给客户。",
+      "复盘本周支出，标记一项可以暂停的低效成本。",
+    ],
+  };
+}
+
+function renderMePage() {
+  return `
+    ${renderTopbar("我的", "设置与内测")}
+    <section class="card">
+      <span class="pill ${state.isPro ? "green" : "blue"}">${state.isPro ? "Pro 内测" : "免费内测"}</span>
+      <div class="action-text">${state.isPro ? "完整 AI 周复盘已开启" : "解锁完整 AI 周复盘"}</div>
+      <div class="hero-sub">当前版本用于 30 天真实用户测试，重点验证记录、复盘和付费意愿。</div>
+      <div class="button-row">
+        <button class="primary-btn" data-open="goal">调整目标</button>
+        <button class="secondary-btn" data-action="export-csv">导出数据</button>
+      </div>
+      <div class="button-row">
+        <button class="secondary-btn" data-action="desktop-mode">桌面屏模式</button>
+        <button class="danger-btn" data-action="reset-demo">重置演示</button>
+      </div>
+    </section>
+    <section class="section notice">
+      AI 生成内容仅供记录和复盘参考，不构成投资、理财、法律、税务、职业或创业成功建议。请结合自身情况独立判断。
+    </section>
+  `;
+}
+
+function renderDesktopMode() {
+  const stats = getStats();
+  return `
+    <main class="desktop-screen">
+      <button class="desktop-exit" data-action="exit-desktop">退出</button>
+      <div class="desktop-brand">亿个小目标</div>
+      <div class="desktop-label">距离 ${shortAmount(state.goal.targetAmount)} 目标还差</div>
+      <div class="desktop-number">${money(stats.remaining)}</div>
+      <div class="desktop-progress">
+        <div style="width:${Math.min(100, stats.progress)}%"></div>
+      </div>
+      <div class="desktop-row">
+        <span>已完成 ${money(stats.completed)}</span>
+        <span>${percent(stats.progress)}</span>
+      </div>
+      <section class="desktop-action">
+        <span>今日</span>
+        <strong>${state.dailyAction.text}</strong>
+        <em>${state.dailyAction.estimatedMinutes} 分钟 · ${state.dailyAction.projectName}</em>
+      </section>
+      <div class="desktop-foot">AI 内容仅供记录和复盘参考，不承诺任何收入结果。</div>
+    </main>
+  `;
+}
+
+function renderOnboarding() {
+  return `
+    <main class="onboarding">
+      <section class="card">
+        <div class="brand">亿</div>
+        <div class="eyebrow">AI 赚钱目标作战台</div>
+        <h1 class="title">先设一个你想盯住的赚钱目标</h1>
+        <p class="hero-sub">我们帮你记录进展、复盘项目，并生成下一步行动参考。</p>
+        <div class="form section">
+          <div class="field">
+            <label>目标金额</label>
+            <select id="onboardTarget">
+              <option value="100000">10 万</option>
+              <option value="300000">30 万</option>
+              <option value="500000">50 万</option>
+              <option value="1000000" selected>100 万</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>截止日期</label>
+            <input id="onboardDeadline" type="date" value="2026-12-31" />
+          </div>
+          <div class="field">
+            <label>当前已完成</label>
+            <input id="onboardInitial" type="number" value="0" min="0" />
+          </div>
+          <div class="field">
+            <label>第一个赚钱项目</label>
+            <input id="onboardProject" value="小红书接广" />
+          </div>
+          <button class="primary-btn" data-action="finish-onboarding">开始我的作战台</button>
+          <div class="notice">AI 内容仅供记录和复盘参考，不承诺任何收入结果。</div>
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+function renderBottomNav() {
+  const nav = [
+    ["home", "⌂", "作战台"],
+    ["record", "+", "记录"],
+    ["projects", "▦", "项目"],
+    ["review", "◴", "复盘"],
+    ["me", "•", "我的"],
+  ];
+  return `
+    <nav class="bottom-nav">
+      ${nav
+        .map(
+          ([id, icon, label]) => `
+          <button class="nav-item ${state.activeTab === id ? "active" : ""}" data-tab="${id}">
+            <span>${icon}</span><span>${label}</span>
+          </button>
+        `,
+        )
+        .join("")}
+    </nav>
+  `;
+}
+
+function renderModal() {
+  if (!state.modal) return "";
+  if (state.modal === "goal") return renderGoalModal();
+  if (state.modal === "project") return renderProjectModal();
+  if (state.modal === "confirm") return renderConfirmModal();
+  if (state.modal === "risk") return renderRiskModal();
+  return "";
+}
+
+function renderGoalModal() {
+  return `
+    <div class="modal-backdrop">
+      <section class="modal">
+        <div class="modal-head"><h2>目标设置</h2><button class="icon-btn" data-close>×</button></div>
+        <div class="form">
+          <div class="field"><label>目标名称</label><input id="goalName" value="${state.goal.name}" /></div>
+          <div class="field"><label>目标金额</label><input id="goalTarget" type="number" value="${state.goal.targetAmount}" /></div>
+          <div class="field"><label>当前已完成</label><input id="goalInitial" type="number" value="${state.goal.initialAmount}" /></div>
+          <div class="field"><label>截止日期</label><input id="goalDeadline" type="date" value="${state.goal.deadline}" /></div>
+          <div class="field"><label>每周可投入时间</label><input id="goalHours" type="number" value="${state.goal.weeklyHours}" /></div>
+          <button class="primary-btn" data-action="save-goal">保存目标</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderProjectModal() {
+  return `
+    <div class="modal-backdrop">
+      <section class="modal">
+        <div class="modal-head"><h2>新建项目</h2><button class="icon-btn" data-close>×</button></div>
+        <div class="form">
+          <div class="field"><label>项目名称</label><input id="projectName" placeholder="例如：咨询服务" /></div>
+          <div class="field"><label>项目类型</label><select id="projectType">${projectTypes.map((item) => `<option>${item}</option>`).join("")}</select></div>
+          <div class="field"><label>状态</label><select id="projectStatus">${projectStatuses.map((item) => `<option>${item}</option>`).join("")}</select></div>
+          <button class="primary-btn" data-action="save-project">保存项目</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderConfirmModal() {
+  return `
+    <div class="modal-backdrop">
+      <section class="modal">
+        <div class="modal-head"><h2>确认记录</h2><button class="icon-btn" data-close>×</button></div>
+        <div class="confirm-list">
+          ${state.draftRecords
+            .map(
+              (item, index) => `
+              <article class="card">
+                <div class="form">
+                  <div class="field">
+                    <label>类型</label>
+                    <select data-draft="${index}" data-field="recordType">
+                      <option value="income" ${item.recordType === "income" ? "selected" : ""}>收入</option>
+                      <option value="expense" ${item.recordType === "expense" ? "selected" : ""}>支出</option>
+                      <option value="action" ${item.recordType === "action" ? "selected" : ""}>行动</option>
+                    </select>
+                  </div>
+                  <div class="field"><label>金额</label><input type="number" data-draft="${index}" data-field="amount" value="${item.amount || 0}" /></div>
+                  <div class="field">
+                    <label>项目</label>
+                    <select data-draft="${index}" data-field="projectId">
+                      ${state.projects.map((project) => `<option value="${project.id}" ${project.id === item.projectId ? "selected" : ""}>${project.name}</option>`).join("")}
+                    </select>
+                  </div>
+                  <div class="field"><label>备注</label><input data-draft="${index}" data-field="note" value="${item.note || ""}" /></div>
+                </div>
+              </article>
+            `,
+            )
+            .join("")}
+          <div class="button-row">
+            <button class="primary-btn" data-action="save-drafts">全部保存</button>
+            <button class="danger-btn" data-close>取消</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderRiskModal() {
+  return `
+    <div class="modal-backdrop">
+      <section class="modal">
+        <div class="modal-head"><h2>高风险内容提醒</h2><button class="icon-btn" data-close>×</button></div>
+        <section class="card">
+          <p class="review-block">我不能为你提供个性化投资、借贷或高风险经营决策建议。我可以帮你整理目标、预算、成本、风险清单，以及适合进一步咨询专业人士的问题。</p>
+          <div class="button-row"><button class="primary-btn" data-close>知道了</button></div>
+        </section>
+      </section>
+    </div>
+  `;
+}
+
+function bindEvents() {
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.activeTab = button.dataset.tab;
+      state.activeProjectId = null;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-open]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.modal = button.dataset.open;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-close]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.modal = null;
+      state.draftRecords = [];
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-project]").forEach((card) => {
+    card.addEventListener("click", () => {
+      state.activeTab = "projects";
+      state.activeProjectId = card.dataset.project;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-record]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteRecord(button.dataset.deleteRecord);
+    });
+  });
+
+  document.querySelectorAll("[data-set-action]").forEach((button) => {
+    button.addEventListener("click", () => setReviewAction(Number(button.dataset.setAction)));
+  });
+
+  document.querySelectorAll("[data-example]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.querySelector("#recordText");
+      if (input) input.value = button.dataset.example;
+    });
+  });
+
+  document.querySelectorAll("[data-draft]").forEach((input) => {
+    input.addEventListener("input", () => updateDraft(input));
+    input.addEventListener("change", () => updateDraft(input));
+  });
+
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", () => handleAction(button.dataset.action));
+  });
+}
+
+function updateDraft(input) {
+  const index = Number(input.dataset.draft);
+  const field = input.dataset.field;
+  if (!state.draftRecords[index]) return;
+  state.draftRecords[index][field] = field === "amount" ? Number(input.value) : input.value;
+}
+
+function handleAction(action) {
+  if (action === "finish-onboarding") finishOnboarding();
+  if (action === "save-goal") saveGoal();
+  if (action === "save-project") saveProject();
+  if (action === "parse-record") parseRecord();
+  if (action === "save-drafts") saveDrafts();
+  if (action === "complete-action") completeAction();
+  if (action === "refresh-action") refreshAction();
+  if (action === "desktop-mode") {
+    state.desktopMode = true;
+    saveState();
+    render();
+  }
+  if (action === "exit-desktop") {
+    state.desktopMode = false;
+    saveState();
+    render();
+  }
+  if (action === "unlock-pro") unlockPro();
+  if (action === "export-csv") exportCsv();
+  if (action === "back-projects") {
+    state.activeProjectId = null;
+    render();
+  }
+  if (action === "reset-demo") {
+    localStorage.removeItem(STORAGE_KEY);
+    state = structuredClone(defaultState);
+    render();
+  }
+}
+
+function finishOnboarding() {
+  const target = Number(document.querySelector("#onboardTarget").value || 1000000);
+  const deadline = document.querySelector("#onboardDeadline").value || "2026-12-31";
+  const initial = Number(document.querySelector("#onboardInitial").value || 0);
+  const projectName = document.querySelector("#onboardProject").value.trim() || "第一个赚钱项目";
+  const projectId = uid();
+  state.hasOnboarded = true;
+  state.goal = { ...state.goal, targetAmount: target, initialAmount: initial, deadline };
+  state.projects = [{ id: projectId, name: projectName, type: "内容/IP", status: "验证中", description: "" }];
+  state.records = [];
+  state.dailyAction = {
+    text: "记录今天的一笔收入、支出或行动",
+    projectName,
+    estimatedMinutes: 10,
+    status: "pending",
+  };
+  saveState();
+  render();
+}
+
+function saveGoal() {
+  state.goal = {
+    ...state.goal,
+    name: document.querySelector("#goalName").value.trim() || state.goal.name,
+    targetAmount: Number(document.querySelector("#goalTarget").value || state.goal.targetAmount),
+    initialAmount: Number(document.querySelector("#goalInitial").value || 0),
+    deadline: document.querySelector("#goalDeadline").value || state.goal.deadline,
+    weeklyHours: Number(document.querySelector("#goalHours").value || 0),
+  };
+  state.modal = null;
+  saveState();
+  render();
+}
+
+function saveProject() {
+  const name = document.querySelector("#projectName").value.trim();
+  if (!name) return;
+  state.projects.push({
+    id: uid(),
+    name,
+    type: document.querySelector("#projectType").value,
+    status: document.querySelector("#projectStatus").value,
+    description: "",
+  });
+  state.modal = null;
+  saveState();
+  render();
+}
+
+function parseRecord() {
+  const input = document.querySelector("#recordText");
+  const text = input?.value.trim();
+  if (!text) return;
+  if (riskWords.some((word) => text.includes(word))) {
+    state.modal = "risk";
+    render();
+    return;
+  }
+  state.draftRecords = parseTextToDrafts(text);
+  state.modal = "confirm";
+  render();
+}
+
+function parseTextToDrafts(text) {
+  const project = guessProject(text);
+  const clauses = text
+    .split(/[，,。；;、]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const parts = clauses.length ? clauses : [text];
+  const drafts = [];
+
+  for (const part of parts) {
+    const amountMatches = [...part.matchAll(/(\d+(?:\.\d{1,2})?)\s*(元|块|圆)?/g)];
+    if (!amountMatches.length) continue;
+    const isExpense = /(花|支出|付|投流|成本|买|发了|用了|扣|亏)/.test(part);
+    const isIncome = /(收入|进账|赚|收款|到账|接广|成交|尾款|分成)/.test(part);
+    amountMatches.forEach((match) => {
+      drafts.push({
+        id: uid(),
+        recordType: isExpense && !isIncome ? "expense" : "income",
+        amount: Number(match[1]),
+        projectId: project.id,
+        note: cleanNote(part),
+        sourceText: text,
+        occurredAt: todayISO(),
+        includedInGoal: !(isExpense && !isIncome),
+        aiConfidence: 0.82,
+      });
+    });
+  }
+
+  if (drafts.length) return drafts;
+
+  if (/(联系|发布|整理|复盘|跟进)/.test(text)) {
+    return [
+      {
+        id: uid(),
+        recordType: "action",
+        amount: 0,
+        actionCount: Number(text.match(/\d+/)?.[0] || 1),
+        actionUnit: text.includes("客户") ? "个客户" : "次",
+        projectId: project.id,
+        note: text,
+        sourceText: text,
+        occurredAt: todayISO(),
+        includedInGoal: false,
+        aiConfidence: 0.78,
+      },
+    ];
+  }
+  return [];
+}
+
+function guessProject(text) {
+  return state.projects.find((project) => text.includes(project.name.slice(0, 2)) || text.includes(project.name)) || state.projects[0];
+}
+
+function cleanNote(text) {
+  return text.replace(/\s+/g, " ").slice(0, 40);
+}
+
+function saveDrafts() {
+  const drafts = state.draftRecords.map((item) => ({
+    ...item,
+    id: uid(),
+    createdAt: new Date().toISOString(),
+    occurredAt: item.occurredAt || todayISO(),
+    includedInGoal: item.recordType === "income" ? item.includedInGoal !== false : false,
+  }));
+  state.records.push(...drafts);
+  state.draftRecords = [];
+  state.modal = null;
+  state.activeTab = "home";
+  state.dailyAction = generateAction();
+  saveState();
+  render();
+}
+
+function deleteRecord(id) {
+  state.records = state.records.filter((item) => item.id !== id);
+  saveState();
+  render();
+}
+
+function setReviewAction(index) {
+  const action = buildReview().actions[index];
+  if (!action) return;
+  state.dailyAction = {
+    text: action.replace(/^围绕\s+/, "").replace(/。$/, ""),
+    projectName: getStats().bestProject?.name || state.projects[0]?.name || "当前项目",
+    estimatedMinutes: 30,
+    status: "pending",
+  };
+  state.activeTab = "home";
+  saveState();
+  render();
+}
+
+function unlockPro() {
+  state.isPro = true;
+  saveState();
+  render();
+}
+
+function exportCsv() {
+  const header = ["日期", "类型", "项目", "金额", "备注", "是否计入目标"];
+  const rows = state.records.map((item) => {
+    const type = item.recordType === "income" ? "收入" : item.recordType === "expense" ? "支出" : "行动";
+    const project = getProject(item.projectId)?.name || "未关联项目";
+    return [item.occurredAt, type, project, item.amount || "", item.note || "", item.includedInGoal ? "是" : "否"];
+  });
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `亿个小目标记录_${todayISO().replaceAll("-", "")}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function completeAction() {
+  state.dailyAction.status = "completed";
+  saveState();
+  render();
+}
+
+function refreshAction() {
+  state.dailyAction = generateAction();
+  saveState();
+  render();
+}
+
+function generateAction() {
+  const stats = getStats();
+  const best = stats.bestProject || state.projects[0];
+  const actions = [
+    { text: `联系 3 个和${best?.name || "当前项目"}相关的潜在客户`, minutes: 30 },
+    { text: "整理 1 个最近的成交案例", minutes: 25 },
+    { text: "发布 1 条展示成果的内容", minutes: 40 },
+    { text: "复盘本周最大一笔支出", minutes: 20 },
+    { text: "记录今天的一笔收入、支出或行动", minutes: 10 },
+  ];
+  const pick = actions[Math.floor(Math.random() * actions.length)];
+  return {
+    text: pick.text,
+    projectName: best?.name || "当前项目",
+    estimatedMinutes: pick.minutes,
+    status: "pending",
+  };
+}
+
+render();
