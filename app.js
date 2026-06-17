@@ -22,6 +22,7 @@ const riskWords = [
 
 const projectTypes = ["内容/IP", "接单服务", "咨询", "电商", "私域", "实体小生意", "其他"];
 const projectStatuses = ["验证中", "增长中", "暂缓", "已结束"];
+const USD_TO_CNY = 7.2;
 const startTemplates = {
   side: {
     label: "副业变现",
@@ -531,7 +532,11 @@ function renderRecordPage() {
           <button class="chip" data-example="视频号投流花了 120">支出 120</button>
           <button class="chip" data-example="联系了 3 个潜在客户">联系 3 个客户</button>
         </div>
-        <button class="primary-btn" data-action="parse-record">AI 识别</button>
+        <div class="button-row">
+          <button class="secondary-btn" data-action="voice-input">语音输入</button>
+          <button class="primary-btn" data-action="parse-record">AI 识别</button>
+        </div>
+        <div class="notice">提示：没有明确提到项目时，会先归为“未关联”，你可以在确认卡里选择项目。</div>
       </div>
     </section>
 
@@ -940,6 +945,7 @@ function renderConfirmModal() {
                   <div class="field">
                     <label>项目</label>
                     <select data-draft="${index}" data-field="projectId">
+                      <option value="" ${!item.projectId ? "selected" : ""}>未关联/个人事项</option>
                       ${state.projects.map((project) => `<option value="${project.id}" ${project.id === item.projectId ? "selected" : ""}>${project.name}</option>`).join("")}
                     </select>
                   </div>
@@ -1079,6 +1085,7 @@ function handleAction(action) {
   }
   if (action === "save-project") saveProject();
   if (action === "delete-project") deleteProject();
+  if (action === "voice-input") startVoiceInput();
   if (action === "parse-record") parseRecord();
   if (action === "save-drafts") saveDrafts();
   if (action === "complete-action") completeAction();
@@ -1274,6 +1281,50 @@ function parseRecord() {
   render();
 }
 
+function startVoiceInput() {
+  const input = document.querySelector("#recordText");
+  if (!input) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  input.focus();
+
+  if (!SpeechRecognition) {
+    alert("当前浏览器不支持网页语音识别。可以点输入框后使用微信/系统键盘上的麦克风语音输入。");
+    return;
+  }
+
+  const button = document.querySelector('[data-action="voice-input"]');
+  const originalText = button?.textContent || "语音输入";
+  const recognition = new SpeechRecognition();
+  recognition.lang = "zh-CN";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    if (button) button.textContent = "正在听...";
+  };
+
+  recognition.onresult = (event) => {
+    const transcript = Array.from(event.results)
+      .map((result) => result[0]?.transcript || "")
+      .join("")
+      .trim();
+    if (!transcript) return;
+    const prefix = input.value.trim();
+    input.value = prefix ? `${prefix}，${transcript}` : transcript;
+    input.focus();
+  };
+
+  recognition.onerror = () => {
+    alert("语音识别没有成功。可以再试一次，或使用微信/系统键盘麦克风输入。");
+  };
+
+  recognition.onend = () => {
+    if (button) button.textContent = originalText;
+  };
+
+  recognition.start();
+}
+
 function parseTextToDrafts(text) {
   const project = guessProject(text);
   const clauses = text
@@ -1284,17 +1335,33 @@ function parseTextToDrafts(text) {
   const drafts = [];
 
   for (const part of parts) {
-    const amountMatches = [...part.matchAll(/(\d+(?:\.\d{1,2})?)\s*(元|块|圆)?/g)];
+    const hasMoneyIntent = /(收入|进账|赚|收款|到账|接广|成交|尾款|分成|花|支出|付|投流|成本|买|发了|用了|扣|亏|充值|房贷|美金|美元|usd|\$|¥|￥)/i.test(part);
+    const hasActionIntent = /(联系|发布|整理|复盘|跟进|拜访|沟通|面试|投递|客户)/.test(part);
+    if (!hasMoneyIntent && hasActionIntent) continue;
+    const amountMatches = [...part.matchAll(/([$￥¥])?\s*(\d+(?:\.\d{1,2})?)\s*(美金|美元|刀|usd|USD|元|块|圆)?/g)].filter((match) => {
+      const unit = match[3] || match[1] || "";
+      const after = part.slice((match.index || 0) + match[0].length, (match.index || 0) + match[0].length + 2);
+      if (!unit && /个|位|条|次|人|家/.test(after)) return false;
+      return Boolean(unit) || hasMoneyIntent;
+    });
     if (!amountMatches.length) continue;
     const isExpense = /(花|支出|付|投流|成本|买|发了|用了|扣|亏)/.test(part);
     const isIncome = /(收入|进账|赚|收款|到账|接广|成交|尾款|分成)/.test(part);
     amountMatches.forEach((match) => {
+      const rawAmount = Number(match[2]);
+      const unit = match[3] || match[1] || "";
+      const isUsd = /美金|美元|刀|usd|USD|\$/.test(unit);
+      const amount = isUsd ? Math.round(rawAmount * USD_TO_CNY * 100) / 100 : rawAmount;
+      const note = isUsd ? `${cleanNote(part)}（${rawAmount}美元，按 ${USD_TO_CNY} 折算）` : cleanNote(part);
       drafts.push({
         id: uid(),
         recordType: isExpense && !isIncome ? "expense" : "income",
-        amount: Number(match[1]),
-        projectId: project.id,
-        note: cleanNote(part),
+        amount,
+        originalAmount: rawAmount,
+        currency: isUsd ? "USD" : "CNY",
+        exchangeRate: isUsd ? USD_TO_CNY : 1,
+        projectId: project?.id || "",
+        note,
         sourceText: text,
         occurredAt: todayISO(),
         includedInGoal: !(isExpense && !isIncome),
@@ -1313,7 +1380,7 @@ function parseTextToDrafts(text) {
         amount: 0,
         actionCount: Number(text.match(/\d+/)?.[0] || 1),
         actionUnit: text.includes("客户") ? "个客户" : "次",
-        projectId: project.id,
+        projectId: project?.id || "",
         note: text,
         sourceText: text,
         occurredAt: todayISO(),
@@ -1326,7 +1393,14 @@ function parseTextToDrafts(text) {
 }
 
 function guessProject(text) {
-  return state.projects.find((project) => text.includes(project.name.slice(0, 2)) || text.includes(project.name)) || state.projects[0];
+  return (
+    state.projects.find((project) => text.includes(project.name)) ||
+    state.projects.find((project) => {
+      const key = project.name.replace(/产品|销售|服务|项目|运营|收入|支出/g, "").slice(0, 3);
+      return key.length >= 2 && text.includes(key);
+    }) ||
+    null
+  );
 }
 
 function cleanNote(text) {
