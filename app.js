@@ -23,6 +23,7 @@ const riskWords = [
 
 const projectTypes = ["内容/IP", "接单服务", "咨询", "电商", "私域", "实体小生意", "其他"];
 const projectStatuses = ["验证中", "增长中", "暂缓", "已结束"];
+const projectStages = ["想法", "验证", "成交", "增长", "暂停"];
 const USD_TO_CNY = 7.2;
 const startTemplates = {
   side: {
@@ -86,6 +87,17 @@ const defaultState = {
   recordNotice: "",
   desktopMode: false,
   isPro: false,
+  personalProfile: {
+    role: "",
+    incomePressure: "",
+    weeklyHours: 8,
+    skills: "",
+    resources: "",
+    earningPreference: "副业变现",
+    riskPreference: "稳健",
+    salesComfort: "可以尝试",
+    aiTools: "",
+  },
   goal: {
     name: "第一个 100 万",
     targetAmount: 100000,
@@ -588,7 +600,7 @@ function renderProjectCard(project) {
       <div class="project-top">
         <div>
           <div class="project-name">${project.name}</div>
-          <div class="project-meta">${project.type} · ${project.status}</div>
+          <div class="project-meta">${project.type} · ${project.stage || project.status} ${project.targetCustomer ? `· ${project.targetCustomer}` : ""}</div>
         </div>
         <span class="pill ${project.weekNet >= 0 ? "green" : "orange"}">${project.weekNet >= 0 ? "净收益" : "需观察"}</span>
       </div>
@@ -624,6 +636,15 @@ function renderProjectDetail(project) {
       <div class="button-row">
         <button class="secondary-btn" data-edit-project="${project.id}">编辑项目</button>
         <button class="secondary-btn" data-tab="record">记一笔</button>
+      </div>
+    </section>
+    <section class="section card">
+      <span class="pill blue">项目画像</span>
+      <div class="profile-list">
+        <div><strong>目标客户</strong><span>${project.targetCustomer || "未填写"}</span></div>
+        <div><strong>变现方式</strong><span>${project.monetization || "未填写"}</span></div>
+        <div><strong>阶段</strong><span>${project.stage || project.status || "未填写"}</span></div>
+        <div><strong>下一步</strong><span>${project.nextAction || "未填写"}</span></div>
       </div>
     </section>
     <section class="section card">
@@ -707,21 +728,23 @@ function buildReview() {
   const stats = getStats();
   const best = stats.bestProject;
   const watch = [...stats.projectStats].sort((a, b) => a.weekNet - b.weekNet)[0];
+  const profile = state.personalProfile || {};
   const summary = `本周你共记录 ${getWeekRecords().length} 次，收入 ${money(stats.weekIncome)}，支出 ${money(stats.weekExpense)}，净收益 ${money(stats.weekNet)}。`;
   const bestText = best
-    ? `${best.name} 本周净收益 ${money(best.weekNet)}。如果这个收入来自少数订单，建议继续验证复购和转介绍。`
+    ? `${best.name} 本周净收益 ${money(best.weekNet)}。${best.targetCustomer ? `目标客户是${best.targetCustomer}，` : ""}建议继续验证复购和转介绍。`
     : "记录还不够多，暂时无法判断最佳项目。";
   const watchText =
     watch && watch.weekNet < 0
       ? `${watch.name} 本周净收益为 ${money(watch.weekNet)}。建议先复盘成本来源，暂停无明确回报的新增投入。`
       : "暂时没有明显亏损项目，但样本量有限，继续记录一周会更准确。";
   const projectName = best?.name || state.projects[0]?.name || "当前项目";
+  const profileHint = profile.weeklyHours ? `按你每周可投入 ${profile.weeklyHours} 小时来安排，` : "";
   return {
     summary,
     best: bestText,
     watch: watchText,
     actions: [
-      `围绕 ${projectName} 联系 3 个潜在客户或相似品牌。`,
+      `${profileHint}围绕 ${projectName} 联系 3 个潜在客户或相似品牌。`,
       "整理 1 个最近的成交案例，发布成内容或发给客户。",
       "复盘本周支出，标记一项可以暂停的低效成本。",
     ],
@@ -729,8 +752,26 @@ function buildReview() {
 }
 
 function renderMePage() {
+  const profile = state.personalProfile || {};
+  const profileReady = Boolean(profile.role || profile.skills || profile.resources);
   return `
     ${renderTopbar("我的", "设置与内测")}
+    <section class="card">
+      <span class="pill ${profileReady ? "green" : "orange"}">${profileReady ? "画像已建立" : "画像待补充"}</span>
+      <div class="action-text">${profile.role || "补充个人画像，让 AI 更懂你"}</div>
+      <div class="hero-sub">${profile.skills || "填写职业、技能、资源、时间和赚钱偏好，后续行动建议会更贴合你。"}</div>
+      <div class="button-row">
+        <button class="primary-btn" data-open="profile">${profileReady ? "编辑个人画像" : "建立个人画像"}</button>
+      </div>
+    </section>
+    <section class="section card">
+      <span class="pill blue">AI 判断依据</span>
+      <div class="profile-grid">
+        <div class="metric"><span>可投入时间</span><strong>${profile.weeklyHours || state.goal.weeklyHours || 0} 小时/周</strong></div>
+        <div class="metric"><span>赚钱偏好</span><strong>${profile.earningPreference || "未填写"}</strong></div>
+        <div class="metric"><span>风险偏好</span><strong>${profile.riskPreference || state.goal.riskPreference || "未填写"}</strong></div>
+      </div>
+    </section>
     <section class="card">
       <span class="pill ${state.isPro ? "green" : "blue"}">${state.isPro ? "Pro 内测" : "免费内测"}</span>
       <div class="action-text">${state.isPro ? "完整 AI 周复盘已开启" : "解锁完整 AI 周复盘"}</div>
@@ -876,11 +917,50 @@ function renderBottomNav() {
 function renderModal() {
   if (!state.modal) return "";
   if (state.modal === "goal") return renderGoalModal();
+  if (state.modal === "profile") return renderProfileModal();
   if (state.modal === "project") return renderProjectModal();
   if (state.modal === "record") return renderRecordModal();
   if (state.modal === "confirm") return renderConfirmModal();
   if (state.modal === "risk") return renderRiskModal();
   return "";
+}
+
+function renderProfileModal() {
+  const profile = state.personalProfile || {};
+  return `
+    <div class="modal-backdrop">
+      <section class="modal">
+        <div class="modal-head"><h2>个人画像</h2><button class="icon-btn" data-close>×</button></div>
+        <div class="form">
+          <div class="field"><label>当前职业/身份</label><input id="profileRole" placeholder="例如：设备销售 / 产品经理 / 自由职业" value="${profile.role || ""}" /></div>
+          <div class="field"><label>收入压力/当前处境</label><input id="profilePressure" placeholder="例如：想增加副业收入、转型、现金流紧" value="${profile.incomePressure || ""}" /></div>
+          <div class="field"><label>每周可投入时间</label><input id="profileHours" type="number" min="0" value="${profile.weeklyHours || state.goal.weeklyHours || 0}" /></div>
+          <div class="field"><label>技能</label><textarea id="profileSkills" placeholder="销售、报价、内容、交付、AI工具、行业经验等">${profile.skills || ""}</textarea></div>
+          <div class="field"><label>资源</label><textarea id="profileResources" placeholder="客户资源、人脉、行业资源、设备、渠道等">${profile.resources || ""}</textarea></div>
+          <div class="field">
+            <label>赚钱偏好</label>
+            <select id="profilePreference">
+              ${["副业变现", "接单服务", "小生意经营", "求职涨薪", "创业项目"].map((item) => `<option ${profile.earningPreference === item ? "selected" : ""}>${item}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label>风险偏好</label>
+            <select id="profileRisk">
+              ${["保守", "稳健", "积极"].map((item) => `<option ${profile.riskPreference === item ? "selected" : ""}>${item}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field">
+            <label>销售接受度</label>
+            <select id="profileSales">
+              ${["抗拒销售", "可以尝试", "愿意主动销售"].map((item) => `<option ${profile.salesComfort === item ? "selected" : ""}>${item}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field"><label>常用 AI 工具</label><input id="profileAiTools" placeholder="例如：ChatGPT、Claude、豆包、即梦、剪映" value="${profile.aiTools || ""}" /></div>
+          <button class="primary-btn" data-action="save-profile">保存画像</button>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function renderGoalModal() {
@@ -911,6 +991,10 @@ function renderProjectModal() {
           <div class="field"><label>项目名称</label><input id="projectName" placeholder="例如：咨询服务" value="${editing?.name || ""}" /></div>
           <div class="field"><label>项目类型</label><select id="projectType">${projectTypes.map((item) => `<option ${editing?.type === item ? "selected" : ""}>${item}</option>`).join("")}</select></div>
           <div class="field"><label>状态</label><select id="projectStatus">${projectStatuses.map((item) => `<option ${editing?.status === item ? "selected" : ""}>${item}</option>`).join("")}</select></div>
+          <div class="field"><label>阶段</label><select id="projectStage">${projectStages.map((item) => `<option ${editing?.stage === item ? "selected" : ""}>${item}</option>`).join("")}</select></div>
+          <div class="field"><label>目标客户</label><input id="projectTargetCustomer" placeholder="例如：有设备搬迁/改造需求的工厂" value="${editing?.targetCustomer || ""}" /></div>
+          <div class="field"><label>变现方式</label><input id="projectMonetization" placeholder="例如：方案报价、服务费、产品销售、咨询费" value="${editing?.monetization || ""}" /></div>
+          <div class="field"><label>下一步关键动作</label><input id="projectNextAction" placeholder="例如：跟进报价、联系3个类似客户" value="${editing?.nextAction || ""}" /></div>
           <button class="primary-btn" data-action="save-project">${editing ? "保存修改" : "保存项目"}</button>
           ${editing ? `<button class="danger-btn" data-action="delete-project">删除项目</button>` : ""}
         </div>
@@ -1141,6 +1225,7 @@ function handleAction(action) {
   if (action === "auth-logout") signOut();
   if (action === "sync-now") syncNow();
   if (action === "finish-onboarding") finishOnboarding();
+  if (action === "save-profile") saveProfile();
   if (action === "save-goal") saveGoal();
   if (action === "new-project") {
     state.editProjectId = null;
@@ -1277,6 +1362,29 @@ async function syncNow() {
   render();
 }
 
+function saveProfile() {
+  const weeklyHours = Number(document.querySelector("#profileHours")?.value || 0);
+  state.personalProfile = {
+    role: document.querySelector("#profileRole")?.value.trim() || "",
+    incomePressure: document.querySelector("#profilePressure")?.value.trim() || "",
+    weeklyHours,
+    skills: document.querySelector("#profileSkills")?.value.trim() || "",
+    resources: document.querySelector("#profileResources")?.value.trim() || "",
+    earningPreference: document.querySelector("#profilePreference")?.value || "副业变现",
+    riskPreference: document.querySelector("#profileRisk")?.value || "稳健",
+    salesComfort: document.querySelector("#profileSales")?.value || "可以尝试",
+    aiTools: document.querySelector("#profileAiTools")?.value.trim() || "",
+  };
+  state.goal = {
+    ...state.goal,
+    weeklyHours,
+    riskPreference: state.personalProfile.riskPreference,
+  };
+  state.modal = null;
+  saveState();
+  render();
+}
+
 function saveGoal() {
   state.goal = {
     ...state.goal,
@@ -1298,6 +1406,10 @@ function saveProject() {
     name,
     type: document.querySelector("#projectType").value,
     status: document.querySelector("#projectStatus").value,
+    stage: document.querySelector("#projectStage").value,
+    targetCustomer: document.querySelector("#projectTargetCustomer").value.trim(),
+    monetization: document.querySelector("#projectMonetization").value.trim(),
+    nextAction: document.querySelector("#projectNextAction").value.trim(),
   };
   if (state.editProjectId) {
     state.projects = state.projects.map((project) => (project.id === state.editProjectId ? { ...project, ...data } : project));

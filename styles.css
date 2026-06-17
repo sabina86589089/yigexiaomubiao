@@ -326,6 +326,41 @@ button {
   gap: 8px;
 }
 
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.profile-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.profile-list div {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-list div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.profile-list strong {
+  font-size: 13px;
+}
+
+.profile-list span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 8px;
