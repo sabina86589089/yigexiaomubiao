@@ -80,49 +80,27 @@ const defaultState = {
   editRecordId: null,
   modal: null,
   draftRecords: [],
+  recordInputText: "",
+  recordNotice: "",
   desktopMode: false,
   isPro: false,
   goal: {
     name: "第一个 100 万",
-    targetAmount: 1000000,
-    initialAmount: 83520,
+    targetAmount: 100000,
+    initialAmount: 0,
     deadline: "2026-12-31",
     weeklyHours: 8,
     riskPreference: "稳健",
   },
-  projects: [
-    {
-      id: uid(),
-      name: "小红书接广",
-      type: "内容/IP",
-      status: "增长中",
-      description: "内容账号商业化",
-    },
-    {
-      id: uid(),
-      name: "咨询服务",
-      type: "咨询",
-      status: "验证中",
-      description: "个人经验产品化",
-    },
-    {
-      id: uid(),
-      name: "视频号",
-      type: "内容/IP",
-      status: "验证中",
-      description: "短视频流量测试",
-    },
-  ],
+  projects: [],
   records: [],
   dailyAction: {
-    text: "联系 3 个上周咨询过的潜在客户",
-    projectName: "咨询服务",
-    estimatedMinutes: 30,
+    text: "记录今天的一笔收入、支出或行动",
+    projectName: "",
+    estimatedMinutes: 10,
     status: "pending",
   },
 };
-
-defaultState.records = seedRecords(defaultState.projects);
 
 let state = loadState();
 
@@ -527,7 +505,7 @@ function renderRecordPage() {
       <div class="form">
         <div class="field">
           <label>今天发生了什么？</label>
-          <textarea id="recordText" placeholder="例如：今天小红书接广收入 800，投流花了 120"></textarea>
+          <textarea id="recordText" placeholder="例如：今天小红书接广收入 800，投流花了 120">${state.recordInputText || ""}</textarea>
         </div>
         <div class="chips">
           <button class="chip" data-example="今天小红书接广收入 800">收入 800</button>
@@ -538,6 +516,7 @@ function renderRecordPage() {
           <button class="secondary-btn" data-action="voice-input">语音输入</button>
           <button class="primary-btn" data-action="parse-record">AI 识别</button>
         </div>
+        ${state.recordNotice ? `<div class="notice auth-error">${state.recordNotice}</div>` : ""}
         <div class="notice">提示：没有明确提到项目时，会先归为“未关联”，你可以在确认卡里选择项目。</div>
       </div>
     </section>
@@ -585,7 +564,7 @@ function renderProjectsPage() {
       <button class="tab">ROI</button>
     </div>
     <div class="project-list">
-      ${stats.map(renderProjectCard).join("")}
+      ${stats.map(renderProjectCard).join("") || `<div class="empty">还没有项目。你可以先记录个人事项，或者新建第一个赚钱项目。</div>`}
     </div>
     <div class="section">
       <button class="primary-btn" data-action="new-project">新建项目</button>
@@ -769,7 +748,7 @@ function renderMePage() {
       <input id="backupFile" type="file" accept="application/json,.json" hidden />
       <div class="button-row">
         <button class="secondary-btn" data-action="desktop-mode">桌面屏模式</button>
-        <button class="danger-btn" data-action="reset-demo">重置演示</button>
+        <button class="danger-btn" data-action="reset-demo">重新开始</button>
       </div>
     </section>
     <section class="section card">
@@ -825,10 +804,10 @@ function renderOnboarding() {
           <div class="field">
             <label>目标金额</label>
             <select id="onboardTarget">
-              <option value="100000">10 万</option>
+              <option value="100000" selected>10 万</option>
               <option value="300000">30 万</option>
               <option value="500000">50 万</option>
-              <option value="1000000" selected>100 万</option>
+              <option value="1000000">100 万</option>
             </select>
           </div>
           <div class="field">
@@ -842,12 +821,12 @@ function renderOnboarding() {
           <div class="field">
             <label>起步模板</label>
             <select id="onboardTemplate">
-              ${Object.entries(startTemplates).map(([key, item]) => `<option value="${key}">${item.label}</option>`).join("")}
+              ${Object.entries(startTemplates).map(([key, item]) => `<option value="${key}" ${key === "blank" ? "selected" : ""}>${item.label}</option>`).join("")}
             </select>
           </div>
           <div class="field">
             <label>第一个项目名称</label>
-            <input id="onboardProject" value="小红书接广" />
+            <input id="onboardProject" placeholder="可以先不填，之后在项目页添加" />
           </div>
           <button class="primary-btn" data-action="finish-onboarding">开始我的作战台</button>
           <div class="notice">AI 内容仅供记录和复盘参考，不承诺任何收入结果。</div>
@@ -1087,9 +1066,21 @@ function bindEvents() {
   document.querySelectorAll("[data-example]").forEach((button) => {
     button.addEventListener("click", () => {
       const input = document.querySelector("#recordText");
-      if (input) input.value = button.dataset.example;
+      if (input) {
+        input.value = button.dataset.example;
+        state.recordInputText = input.value;
+        state.recordNotice = "";
+      }
     });
   });
+
+  const recordText = document.querySelector("#recordText");
+  if (recordText) {
+    recordText.addEventListener("input", () => {
+      state.recordInputText = recordText.value;
+      state.recordNotice = "";
+    });
+  }
 
   const backupFile = document.querySelector("#backupFile");
   if (backupFile) {
@@ -1177,23 +1168,26 @@ function finishOnboarding() {
   const target = Number(document.querySelector("#onboardTarget").value || 1000000);
   const deadline = document.querySelector("#onboardDeadline").value || "2026-12-31";
   const initial = Number(document.querySelector("#onboardInitial").value || 0);
-  const projectName = document.querySelector("#onboardProject").value.trim() || "第一个赚钱项目";
+  const projectName = document.querySelector("#onboardProject").value.trim();
   const templateKey = document.querySelector("#onboardTemplate")?.value || "side";
   const template = startTemplates[templateKey] || startTemplates.side;
-  const projects = template.projects.map(([name, type], index) => ({
-    id: uid(),
-    name: index === 0 ? projectName : name,
-    type,
-    status: "验证中",
-    description: "",
-  }));
+  const projects =
+    templateKey === "blank" && !projectName
+      ? []
+      : template.projects.map(([name, type], index) => ({
+          id: uid(),
+          name: index === 0 && projectName ? projectName : name,
+          type,
+          status: "验证中",
+          description: "",
+        }));
   state.hasOnboarded = true;
   state.goal = { ...state.goal, targetAmount: target, initialAmount: initial, deadline };
   state.projects = projects;
   state.records = [];
   state.dailyAction = {
     text: "记录今天的一笔收入、支出或行动",
-    projectName,
+    projectName: projects[0]?.name || "",
     estimatedMinutes: 10,
     status: "pending",
   };
@@ -1350,12 +1344,20 @@ function parseRecord() {
   const input = document.querySelector("#recordText");
   const text = input?.value.trim();
   if (!text) return;
+  state.recordInputText = text;
+  state.recordNotice = "";
   if (riskWords.some((word) => text.includes(word))) {
     state.modal = "risk";
     render();
     return;
   }
-  state.draftRecords = parseTextToDrafts(text);
+  const drafts = parseTextToDrafts(text);
+  if (!drafts.length) {
+    state.recordNotice = "这句话还没识别出收入、支出或行动。可以补充金额、项目或动作，例如“房贷支出3150”或“联系3个客户”。";
+    render();
+    return;
+  }
+  state.draftRecords = drafts;
   state.modal = "confirm";
   render();
 }
@@ -1390,6 +1392,8 @@ function startVoiceInput() {
     if (!transcript) return;
     const prefix = input.value.trim();
     input.value = prefix ? `${prefix}，${transcript}` : transcript;
+    state.recordInputText = input.value;
+    state.recordNotice = "";
     input.focus();
   };
 
@@ -1496,6 +1500,8 @@ function saveDrafts() {
   }));
   state.records.push(...drafts);
   state.draftRecords = [];
+  state.recordInputText = "";
+  state.recordNotice = "";
   state.modal = null;
   state.activeTab = "home";
   state.dailyAction = generateAction();
