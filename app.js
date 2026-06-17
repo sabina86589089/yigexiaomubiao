@@ -75,6 +75,7 @@ const defaultState = {
   hasOnboarded: false,
   activeTab: "home",
   activeProjectId: null,
+  editProjectId: null,
   modal: null,
   draftRecords: [],
   desktopMode: false,
@@ -196,6 +197,7 @@ function applySnapshot(data) {
     ...data,
     activeTab: "home",
     activeProjectId: null,
+    editProjectId: null,
     modal: null,
     draftRecords: [],
     desktopMode: false,
@@ -578,7 +580,7 @@ function renderProjectsPage() {
       ${stats.map(renderProjectCard).join("")}
     </div>
     <div class="section">
-      <button class="primary-btn" data-open="project">新建项目</button>
+      <button class="primary-btn" data-action="new-project">新建项目</button>
     </div>
   `;
 }
@@ -622,6 +624,10 @@ function renderProjectDetail(project) {
         <div class="metric"><span>本周收入</span><strong class="money positive">${money(project.weekIncome)}</strong></div>
         <div class="metric"><span>本周支出</span><strong class="money negative">${money(project.weekExpense)}</strong></div>
         <div class="metric"><span>本周净收益</span><strong>${money(project.weekNet)}</strong></div>
+      </div>
+      <div class="button-row">
+        <button class="secondary-btn" data-edit-project="${project.id}">编辑项目</button>
+        <button class="secondary-btn" data-tab="record">记一笔</button>
       </div>
     </section>
     <section class="section card">
@@ -737,6 +743,13 @@ function renderMePage() {
         <button class="primary-btn" data-open="goal">调整目标</button>
         <button class="secondary-btn" data-action="export-csv">导出数据</button>
       </div>
+      <div class="field section">
+        <label>补充项目模板</label>
+        <select id="appendTemplate">
+          ${Object.entries(startTemplates).map(([key, item]) => `<option value="${key}">${item.label}</option>`).join("")}
+        </select>
+      </div>
+      <button class="secondary-btn" data-action="append-template">添加模板项目</button>
       <div class="button-row">
         <button class="secondary-btn" data-action="export-backup">完整备份</button>
         <button class="secondary-btn" data-action="import-backup">导入备份</button>
@@ -887,15 +900,17 @@ function renderGoalModal() {
 }
 
 function renderProjectModal() {
+  const editing = state.projects.find((project) => project.id === state.editProjectId);
   return `
     <div class="modal-backdrop">
       <section class="modal">
-        <div class="modal-head"><h2>新建项目</h2><button class="icon-btn" data-close>×</button></div>
+        <div class="modal-head"><h2>${editing ? "编辑项目" : "新建项目"}</h2><button class="icon-btn" data-close>×</button></div>
         <div class="form">
-          <div class="field"><label>项目名称</label><input id="projectName" placeholder="例如：咨询服务" /></div>
-          <div class="field"><label>项目类型</label><select id="projectType">${projectTypes.map((item) => `<option>${item}</option>`).join("")}</select></div>
-          <div class="field"><label>状态</label><select id="projectStatus">${projectStatuses.map((item) => `<option>${item}</option>`).join("")}</select></div>
-          <button class="primary-btn" data-action="save-project">保存项目</button>
+          <div class="field"><label>项目名称</label><input id="projectName" placeholder="例如：咨询服务" value="${editing?.name || ""}" /></div>
+          <div class="field"><label>项目类型</label><select id="projectType">${projectTypes.map((item) => `<option ${editing?.type === item ? "selected" : ""}>${item}</option>`).join("")}</select></div>
+          <div class="field"><label>状态</label><select id="projectStatus">${projectStatuses.map((item) => `<option ${editing?.status === item ? "selected" : ""}>${item}</option>`).join("")}</select></div>
+          <button class="primary-btn" data-action="save-project">${editing ? "保存修改" : "保存项目"}</button>
+          ${editing ? `<button class="danger-btn" data-action="delete-project">删除项目</button>` : ""}
         </div>
       </section>
     </div>
@@ -979,6 +994,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.modal = null;
       state.draftRecords = [];
+      state.editProjectId = null;
       render();
     });
   });
@@ -995,6 +1011,15 @@ function bindEvents() {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       deleteRecord(button.dataset.deleteRecord);
+    });
+  });
+
+  document.querySelectorAll("[data-edit-project]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.editProjectId = button.dataset.editProject;
+      state.modal = "project";
+      render();
     });
   });
 
@@ -1047,7 +1072,13 @@ function handleAction(action) {
   if (action === "sync-now") syncNow();
   if (action === "finish-onboarding") finishOnboarding();
   if (action === "save-goal") saveGoal();
+  if (action === "new-project") {
+    state.editProjectId = null;
+    state.modal = "project";
+    render();
+  }
   if (action === "save-project") saveProject();
+  if (action === "delete-project") deleteProject();
   if (action === "parse-record") parseRecord();
   if (action === "save-drafts") saveDrafts();
   if (action === "complete-action") completeAction();
@@ -1065,6 +1096,7 @@ function handleAction(action) {
   if (action === "unlock-pro") unlockPro();
   if (action === "export-csv") exportCsv();
   if (action === "export-backup") exportBackup();
+  if (action === "append-template") appendTemplateProjects();
   if (action === "import-backup") {
     const input = document.querySelector("#backupFile");
     if (input) input.click();
@@ -1188,14 +1220,42 @@ function saveGoal() {
 function saveProject() {
   const name = document.querySelector("#projectName").value.trim();
   if (!name) return;
-  state.projects.push({
-    id: uid(),
+  const data = {
     name,
     type: document.querySelector("#projectType").value,
     status: document.querySelector("#projectStatus").value,
-    description: "",
-  });
+  };
+  if (state.editProjectId) {
+    state.projects = state.projects.map((project) => (project.id === state.editProjectId ? { ...project, ...data } : project));
+  } else {
+    state.projects.push({
+      id: uid(),
+      ...data,
+      description: "",
+    });
+  }
   state.modal = null;
+  state.editProjectId = null;
+  saveState();
+  render();
+}
+
+function deleteProject() {
+  const project = state.projects.find((item) => item.id === state.editProjectId);
+  if (!project) return;
+  if (state.projects.length <= 1) {
+    alert("至少保留一个项目。");
+    return;
+  }
+  const relatedCount = state.records.filter((record) => record.projectId === project.id).length;
+  const ok = confirm(`确定删除「${project.name}」吗？关联的 ${relatedCount} 条记录也会一起删除。`);
+  if (!ok) return;
+  state.projects = state.projects.filter((item) => item.id !== project.id);
+  state.records = state.records.filter((record) => record.projectId !== project.id);
+  if (state.activeProjectId === project.id) state.activeProjectId = null;
+  state.modal = null;
+  state.editProjectId = null;
+  state.dailyAction = generateAction();
   saveState();
   render();
 }
@@ -1357,6 +1417,29 @@ function exportBackup() {
     data: snapshotState(),
   };
   downloadText(`亿个小目标备份_${todayISO().replaceAll("-", "")}.json`, JSON.stringify(payload, null, 2));
+}
+
+function appendTemplateProjects() {
+  const key = document.querySelector("#appendTemplate")?.value || "side";
+  const template = startTemplates[key] || startTemplates.side;
+  const existingNames = new Set(state.projects.map((project) => project.name));
+  const additions = template.projects
+    .filter(([name]) => !existingNames.has(name))
+    .map(([name, type]) => ({
+      id: uid(),
+      name,
+      type,
+      status: "验证中",
+      description: "",
+    }));
+  if (!additions.length) {
+    alert("这个模板里的项目已经添加过了。");
+    return;
+  }
+  state.projects.push(...additions);
+  saveState();
+  alert(`已添加 ${additions.length} 个项目。`);
+  render();
 }
 
 function importBackupFile(event) {
