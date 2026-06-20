@@ -380,6 +380,35 @@ button {
   padding: 10px;
 }
 
+.project-drafts {
+  display: grid;
+  gap: 10px;
+}
+
+.project-draft {
+  display: grid;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.project-draft > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.project-draft strong {
+  font-size: 15px;
+}
+
+.project-draft span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 8px;

@@ -99,6 +99,7 @@ const defaultState = {
     salesComfort: "可以尝试",
     aiTools: "",
     recommendations: [],
+    projectDrafts: [],
   },
   goal: {
     name: "第一个 100 万",
@@ -335,6 +336,7 @@ function sumByType(records, type) {
 
 function render() {
   const app = document.querySelector("#app");
+  if (!app) return;
   if (cloud.configured && !cloud.checked) {
     app.innerHTML = renderLoadingPage("正在连接云端数据...");
     return;
@@ -941,6 +943,7 @@ function renderModal() {
 function renderProfileModal() {
   const profile = state.personalProfile || {};
   const recommendations = profile.recommendations || [];
+  const projectDrafts = profile.projectDrafts || [];
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -955,6 +958,31 @@ function renderProfileModal() {
             recommendations.length
               ? `<div class="profile-suggestions">${recommendations.map((item) => `<div>${item}</div>`).join("")}</div>`
               : `<div class="notice">先说一段真实情况，系统会自动提取画像并给出推荐。后续可接入大模型，让识别更细。</div>`
+          }
+          ${
+            projectDrafts.length
+              ? `<div class="section-head"><h2 class="section-title">AI 推荐项目</h2></div>
+                <div class="project-drafts">
+                  ${projectDrafts
+                    .map(
+                      (item, index) => `
+                        <article class="project-draft">
+                          <div>
+                            <strong>${item.name}</strong>
+                            <span>${item.targetCustomer}</span>
+                          </div>
+                          <div class="profile-list">
+                            <div><strong>变现方式</strong><span>${item.monetization}</span></div>
+                            <div><strong>下一步</strong><span>${item.nextAction}</span></div>
+                            <div><strong>风险提醒</strong><span>${item.riskWarning}</span></div>
+                          </div>
+                          <button class="secondary-btn" data-add-profile-project="${index}">添加为项目</button>
+                        </article>
+                      `,
+                    )
+                    .join("")}
+                </div>`
+              : ""
           }
           <div class="field"><label>当前职业/身份</label><input id="profileRole" placeholder="例如：设备销售 / 产品经理 / 自由职业" value="${profile.role || ""}" /></div>
           <div class="field"><label>收入压力/当前处境</label><input id="profilePressure" placeholder="例如：想增加副业收入、转型、现金流紧" value="${profile.incomePressure || ""}" /></div>
@@ -1185,6 +1213,10 @@ function bindEvents() {
     button.addEventListener("click", () => setReviewAction(Number(button.dataset.setAction)));
   });
 
+  document.querySelectorAll("[data-add-profile-project]").forEach((button) => {
+    button.addEventListener("click", () => addProfileProjectDraft(Number(button.dataset.addProfileProject)));
+  });
+
   document.querySelectorAll("[data-example]").forEach((button) => {
     button.addEventListener("click", () => {
       const input = document.querySelector("#recordText");
@@ -1401,6 +1433,7 @@ function saveProfile() {
     salesComfort: document.querySelector("#profileSales")?.value || "可以尝试",
     aiTools: document.querySelector("#profileAiTools")?.value.trim() || "",
     recommendations: state.personalProfile.recommendations || [],
+    projectDrafts: state.personalProfile.projectDrafts || [],
   };
   state.goal = {
     ...state.goal,
@@ -1424,6 +1457,7 @@ function analyzeProfile() {
     ...result.profile,
     rawText: text,
     recommendations: result.recommendations,
+    projectDrafts: result.projectDrafts,
   };
   state.goal = {
     ...state.goal,
@@ -1479,6 +1513,7 @@ function parseNaturalProfile(text) {
   return {
     profile,
     recommendations: buildProfileRecommendations(profile),
+    projectDrafts: buildProjectDrafts(profile),
   };
 }
 
@@ -1529,6 +1564,75 @@ function buildProfileRecommendations(profile) {
     `${timeBox}，下一步建议：${action}`,
     "暂不建议重资产投入、囤货或承诺收益，先用真实反馈验证。",
   ];
+}
+
+function buildProjectDrafts(profile) {
+  const resources = profile.resources || "已有客户资源";
+  const lowPressure = profile.salesComfort === "抗拒销售";
+  const isCareer = profile.earningPreference === "求职涨薪";
+  const isBusiness = profile.earningPreference === "小生意经营";
+  const targetCustomer = isCareer ? "目标岗位招聘方或潜在雇主" : resources.includes("工厂") || resources.includes("设备") ? "有设备搬迁/改造/采购需求的工厂客户" : `${resources}中的潜在付费客户`;
+  const base = {
+    type: isCareer ? "其他" : isBusiness ? "实体小生意" : "接单服务",
+    stage: "验证",
+    status: "验证中",
+  };
+  const firstAction = lowPressure
+    ? `整理1个案例，发给3个老客户或${targetCustomer}试探反馈`
+    : `联系3个${targetCustomer}，确认真实需求和预算`;
+  const mainDraft = {
+    ...base,
+    name: isCareer ? "AI能力作品集求职" : resources.includes("工厂") || resources.includes("设备") ? "工厂设备改造咨询" : "个人能力变现服务",
+    targetCustomer,
+    monetization: isCareer ? "求职涨薪 / 项目制顾问机会" : resources.includes("工厂") || resources.includes("设备") ? "方案报价 / 服务费 / 产品销售" : "咨询费 / 交付服务费 / 方案费",
+    nextAction: firstAction,
+    riskWarning: "不要先重资产投入、囤货或承诺收益，先用真实反馈验证。",
+  };
+  const contentDraft = {
+    ...base,
+    type: "内容/IP",
+    name: `${profile.role || "个人能力"}案例内容获客`,
+    targetCustomer,
+    monetization: "内容线索 / 咨询转化 / 服务成交",
+    nextAction: `写1条面向${targetCustomer}的案例内容，观察咨询和转发反馈`,
+    riskWarning: "不要只做泛内容，必须绑定目标客户和明确成交路径。",
+  };
+  return [mainDraft, contentDraft];
+}
+
+function addProfileProjectDraft(index) {
+  const draft = state.personalProfile?.projectDrafts?.[index];
+  if (!draft) return null;
+  const existing = state.projects.find((project) => project.name === draft.name);
+  if (existing) {
+    alert("这个推荐项目已经添加过了。");
+    return existing;
+  }
+  const project = {
+    id: uid(),
+    name: draft.name,
+    type: draft.type || "接单服务",
+    status: draft.status || "验证中",
+    stage: draft.stage || "验证",
+    targetCustomer: draft.targetCustomer || "",
+    monetization: draft.monetization || "",
+    nextAction: draft.nextAction || "",
+    description: draft.riskWarning || "",
+  };
+  state.projects.push(project);
+  state.dailyAction = {
+    text: project.nextAction || `推进 ${project.name} 的第一个客户验证`,
+    projectName: project.name,
+    estimatedMinutes: actionMinutes(25),
+    source: "AI 推荐项目",
+    status: "pending",
+  };
+  state.modal = null;
+  state.activeTab = "projects";
+  state.activeProjectId = project.id;
+  saveState();
+  render();
+  return project;
 }
 
 function saveGoal() {
