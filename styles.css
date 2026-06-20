@@ -361,6 +361,57 @@ button {
   line-height: 1.5;
 }
 
+.profile-list.compact {
+  gap: 6px;
+}
+
+.profile-list.compact div {
+  padding-bottom: 6px;
+}
+
+.profile-display {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-block {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-block > strong {
+  font-size: 13px;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-cloud span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roadmap-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .profile-suggestions {
   display: grid;
   gap: 8px;

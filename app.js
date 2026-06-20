@@ -793,6 +793,7 @@ function buildReview() {
 function renderMePage() {
   const profile = state.personalProfile || {};
   const profileReady = Boolean(profile.role || profile.skills || profile.resources);
+  const profileDisplay = buildProfileDisplay(profile, state.projects);
   return `
     ${renderTopbar("我的", "设置与内测")}
     <section class="card">
@@ -803,6 +804,32 @@ function renderMePage() {
         <button class="primary-btn" data-open="profile">${profileReady ? "编辑个人画像" : "建立个人画像"}</button>
       </div>
     </section>
+    ${
+      profileReady
+        ? `<section class="section card profile-display">
+            <span class="pill blue">AI 画像</span>
+            <div class="action-text">${profileDisplay.positioning}</div>
+            <div class="profile-block">
+              <strong>身份标签</strong>
+              <div class="tag-cloud">${profileDisplay.identityTags.map((item) => `<span>${item}</span>`).join("")}</div>
+            </div>
+            <div class="profile-block">
+              <strong>能力资产</strong>
+              <div class="tag-cloud">${profileDisplay.assetTags.map((item) => `<span>${item}</span>`).join("")}</div>
+            </div>
+            <div class="profile-block">
+              <strong>可变现方向</strong>
+              <div class="profile-list compact">
+                ${profileDisplay.monetizationTags.map((item) => `<div><span>${item}</span></div>`).join("")}
+              </div>
+            </div>
+            <div class="profile-block">
+              <strong>两年百万路线图</strong>
+              <ol class="roadmap-list">${profileDisplay.roadmap.map((item) => `<li>${item}</li>`).join("")}</ol>
+            </div>
+          </section>`
+        : ""
+    }
     <section class="section card">
       <span class="pill blue">AI 判断依据</span>
       <div class="profile-grid">
@@ -1497,7 +1524,30 @@ function parseNaturalProfile(text) {
   const hoursMatch = text.match(/每周[^，。；;、\n]{0,8}?(\d+(?:\.\d+)?)\s*(?:个)?小时/);
   const weeklyHours = hoursMatch ? Number(hoursMatch[1]) : state.personalProfile?.weeklyHours || state.goal.weeklyHours || 8;
   const role = extractProfileRole(text);
-  const skills = pickPhrases(text, ["报价", "客户沟通", "销售", "售前", "方案", "交付", "内容", "剪辑", "写作", "AI工具", "运营", "设计", "产品", "行业经验"]);
+  const skills = pickPhrases(text, [
+    "报价",
+    "客户沟通",
+    "销售",
+    "售前",
+    "方案",
+    "解决方案",
+    "招投标",
+    "需求分析",
+    "交付",
+    "内容",
+    "剪辑",
+    "写作",
+    "AI",
+    "AI工具",
+    "图文",
+    "视频",
+    "业务系统",
+    "系统生成",
+    "运营",
+    "设计",
+    "产品",
+    "行业经验",
+  ]);
   const resources = pickResourcePhrases(text);
   const riskPreference = /保守|稳一点|稳健|不想亏|别亏|低风险|安全/.test(normalized)
     ? "稳健"
@@ -1561,7 +1611,7 @@ function pickPhrases(text, words) {
 }
 
 function pickResourcePhrases(text) {
-  const words = ["工厂老板", "客户资源", "老客户", "人脉", "行业资源", "渠道", "供应链", "社群", "私域", "粉丝"];
+  const words = ["工厂老板", "客户资源", "老客户", "人脉", "行业资源", "渠道", "供应链", "社群", "私域", "粉丝", "小红书", "抖音", "行业拆解", "账号"];
   const picked = pickPhrases(text, words);
   if (picked) return picked;
   const match = text.match(/(?:有|手里有|认识)([^，。；;、\n]{2,24}(?:资源|客户|老板|渠道|人脉))/);
@@ -1588,12 +1638,85 @@ function buildProfileRecommendations(profile) {
   ];
 }
 
+function buildProfileDisplay(profile = {}, projects = []) {
+  const text = `${profile.role || ""} ${profile.skills || ""} ${profile.resources || ""} ${profile.aiTools || ""}`;
+  const hasAi = /AI|AIGC|ChatGPT|Claude|Codex|DeepSeek|图文生成|视频生成|业务系统生成/i.test(text);
+  const hasB2b = /B端|产品|售前|解决方案|招投标|投标|需求|客户|企业|业务系统/.test(text);
+  const hasContent = /小红书|抖音|视频|图文|内容|运营|账号|行业拆解/.test(text);
+  const hasDesign = /设计|视觉|出图|图片|海报/.test(text);
+  const hasDelivery = /交付|系统|低代码|原型|PRD|流程|业务产品/.test(text);
+  const identityTags = uniqueList([
+    hasB2b ? "B端产品/售前" : "",
+    hasAi ? "AI应用落地" : "",
+    hasDelivery ? "数字化解决方案" : "",
+    hasContent ? "行业内容IP" : "",
+    hasDesign ? "设计表达" : "",
+    profile.earningPreference ? profile.earningPreference : "",
+    profile.riskPreference ? `${profile.riskPreference}推进` : "",
+  ]).slice(0, 8);
+  const assetTags = uniqueList([
+    /需求|产品/.test(text) ? "需求分析" : "",
+    /解决方案|方案/.test(text) ? "解决方案设计" : "",
+    /售前|客户/.test(text) ? "客户沟通/售前" : "",
+    /招投标|投标/.test(text) ? "招投标响应" : "",
+    hasAi ? "AI工具应用" : "",
+    /图文|出图|图片/.test(text) ? "AI图文生成" : "",
+    /视频|剪辑|抖音/.test(text) ? "AI视频生成" : "",
+    /业务系统|低代码|原型|系统生成/.test(text) ? "AI业务系统生成" : "",
+    /小红书|抖音|账号|粉丝/.test(text) ? "内容账号运营" : "",
+  ]).slice(0, 9);
+  const projectNames = uniqueList(projects.map((project) => project?.name).filter(Boolean));
+  const monetizationTags = uniqueList([
+    ...projectNames,
+    hasAi && hasB2b ? "AI业务系统生成咨询" : "",
+    hasB2b ? "企业数字化方案/售前咨询" : "",
+    hasContent ? "行业拆解内容获客" : "",
+    hasDelivery ? "原型、PRD、投标材料服务" : "",
+  ])
+    .filter(Boolean)
+    .slice(0, 5);
+  const firstProject = projects.find((project) => project?.nextAction || project?.name) || {};
+  const firstAction = firstProject.nextAction || "整理1个可展示案例";
+  const mainProject = firstProject.name || monetizationTags[0] || "个人能力变现项目";
+  const positioning =
+    hasAi && hasB2b
+      ? "AI应用解决方案服务商"
+      : hasAi
+        ? "AI能力变现服务商"
+        : hasB2b
+          ? "B端解决方案服务商"
+          : profile.role || "个人能力变现者";
+  return {
+    positioning,
+    identityTags: identityTags.length ? identityTags : ["个人能力变现者"],
+    assetTags: assetTags.length ? assetTags : ["经验资产", "执行能力", "学习能力"],
+    monetizationTags: monetizationTags.length ? monetizationTags : ["咨询服务", "项目制交付", "内容获客"],
+    roadmap: [
+      `0-30天：${shortActionText(firstAction)}，沉淀1个可展示案例。`,
+      `1-3个月：围绕「${mainProject}」找到3个真实需求，验证诊断费或小额服务费。`,
+      "3-12个月：把高频需求做成标准化服务包，形成可复用报价、交付清单和案例库。",
+      "12-24个月：筛选利润更高的客户类型，扩大渠道和转介绍，谨慎考虑团队化或产品化。",
+    ],
+  };
+}
+
 function buildProjectDrafts(profile) {
   const resources = profile.resources || "已有客户资源";
   const lowPressure = profile.salesComfort === "抗拒销售";
   const isCareer = profile.earningPreference === "求职涨薪";
   const isBusiness = profile.earningPreference === "小生意经营";
-  const targetCustomer = isCareer ? "目标岗位招聘方或潜在雇主" : resources.includes("工厂") || resources.includes("设备") ? "有设备搬迁/改造/采购需求的工厂客户" : `${resources}中的潜在付费客户`;
+  const profileText = `${profile.role || ""} ${profile.skills || ""} ${profile.resources || ""}`;
+  const isAiB2b = /AI|图文|视频|业务系统|系统生成|低代码/.test(profileText) && /B端|产品|售前|解决方案|招投标|业务系统|企业/.test(profileText);
+  const hasContentChannel = /小红书|抖音|账号|行业拆解|粉丝/.test(resources);
+  const targetCustomer = isCareer
+    ? "目标岗位招聘方或潜在雇主"
+    : isAiB2b
+      ? "有数字化需求但缺产品/技术团队的中小企业老板"
+      : resources.includes("工厂") || resources.includes("设备")
+        ? "有设备搬迁/改造/采购需求的工厂客户"
+        : hasContentChannel
+          ? "通过内容关注行业拆解和AI应用的潜在企业客户"
+          : `${resources}中的潜在付费客户`;
   const base = {
     type: isCareer ? "其他" : isBusiness ? "实体小生意" : "接单服务",
     stage: "验证",
@@ -1601,12 +1724,14 @@ function buildProjectDrafts(profile) {
   };
   const firstAction = lowPressure
     ? `整理1个案例，发给3个老客户或${targetCustomer}试探反馈`
-    : `联系3个${targetCustomer}，确认真实需求和预算`;
+    : isAiB2b
+      ? "整理1个AI业务系统案例，发布到小红书/抖音并发给3个潜在企业客户"
+      : `联系3个${targetCustomer}，确认真实需求和预算`;
   const mainDraft = {
     ...base,
-    name: isCareer ? "AI能力作品集求职" : resources.includes("工厂") || resources.includes("设备") ? "工厂设备改造咨询" : "个人能力变现服务",
+    name: isCareer ? "AI能力作品集求职" : isAiB2b ? "AI业务系统生成咨询" : resources.includes("工厂") || resources.includes("设备") ? "工厂设备改造咨询" : "个人能力变现服务",
     targetCustomer,
-    monetization: isCareer ? "求职涨薪 / 项目制顾问机会" : resources.includes("工厂") || resources.includes("设备") ? "方案报价 / 服务费 / 产品销售" : "咨询费 / 交付服务费 / 方案费",
+    monetization: isCareer ? "求职涨薪 / 项目制顾问机会" : isAiB2b ? "需求诊断费 / 系统原型服务费 / 方案咨询费" : resources.includes("工厂") || resources.includes("设备") ? "方案报价 / 服务费 / 产品销售" : "咨询费 / 交付服务费 / 方案费",
     nextAction: firstAction,
     riskWarning: "不要先重资产投入、囤货或承诺收益，先用真实反馈验证。",
   };
@@ -1620,6 +1745,10 @@ function buildProjectDrafts(profile) {
     riskWarning: "不要只做泛内容，必须绑定目标客户和明确成交路径。",
   };
   return [mainDraft, contentDraft];
+}
+
+function uniqueList(items) {
+  return [...new Set(items.map((item) => String(item || "").trim()).filter(Boolean))];
 }
 
 function shortActionText(text = "") {
