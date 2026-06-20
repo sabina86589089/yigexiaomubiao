@@ -361,6 +361,25 @@ button {
   line-height: 1.5;
 }
 
+.profile-suggestions {
+  display: grid;
+  gap: 8px;
+  background: #eef6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 12px;
+  color: #1e3a8a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.profile-suggestions div {
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  padding: 10px;
+}
+
 .metric {
   border: 1px solid var(--line);
   border-radius: 8px;

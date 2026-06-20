@@ -88,6 +88,7 @@ const defaultState = {
   desktopMode: false,
   isPro: false,
   personalProfile: {
+    rawText: "",
     role: "",
     incomePressure: "",
     weeklyHours: 8,
@@ -97,6 +98,7 @@ const defaultState = {
     riskPreference: "稳健",
     salesComfort: "可以尝试",
     aiTools: "",
+    recommendations: [],
   },
   goal: {
     name: "第一个 100 万",
@@ -938,11 +940,22 @@ function renderModal() {
 
 function renderProfileModal() {
   const profile = state.personalProfile || {};
+  const recommendations = profile.recommendations || [];
   return `
     <div class="modal-backdrop">
       <section class="modal">
         <div class="modal-head"><h2>个人画像</h2><button class="icon-btn" data-close>×</button></div>
         <div class="form">
+          <div class="field">
+            <label>用一段话描述你自己</label>
+            <textarea id="profileRawText" placeholder="例如：我现在做设备销售，熟悉报价和客户沟通，有一些工厂老板资源。每周能投入6小时，想做稳一点的副业，不太想强销售。">${profile.rawText || ""}</textarea>
+          </div>
+          <button class="secondary-btn" data-action="analyze-profile">AI 识别画像</button>
+          ${
+            recommendations.length
+              ? `<div class="profile-suggestions">${recommendations.map((item) => `<div>${item}</div>`).join("")}</div>`
+              : `<div class="notice">先说一段真实情况，系统会自动提取画像并给出推荐。后续可接入大模型，让识别更细。</div>`
+          }
           <div class="field"><label>当前职业/身份</label><input id="profileRole" placeholder="例如：设备销售 / 产品经理 / 自由职业" value="${profile.role || ""}" /></div>
           <div class="field"><label>收入压力/当前处境</label><input id="profilePressure" placeholder="例如：想增加副业收入、转型、现金流紧" value="${profile.incomePressure || ""}" /></div>
           <div class="field"><label>每周可投入时间</label><input id="profileHours" type="number" min="0" value="${profile.weeklyHours || state.goal.weeklyHours || 0}" /></div>
@@ -1236,6 +1249,7 @@ function handleAction(action) {
   if (action === "auth-logout") signOut();
   if (action === "sync-now") syncNow();
   if (action === "finish-onboarding") finishOnboarding();
+  if (action === "analyze-profile") analyzeProfile();
   if (action === "save-profile") saveProfile();
   if (action === "save-goal") saveGoal();
   if (action === "new-project") {
@@ -1376,6 +1390,7 @@ async function syncNow() {
 function saveProfile() {
   const weeklyHours = Number(document.querySelector("#profileHours")?.value || 0);
   state.personalProfile = {
+    rawText: document.querySelector("#profileRawText")?.value.trim() || state.personalProfile.rawText || "",
     role: document.querySelector("#profileRole")?.value.trim() || "",
     incomePressure: document.querySelector("#profilePressure")?.value.trim() || "",
     weeklyHours,
@@ -1385,6 +1400,7 @@ function saveProfile() {
     riskPreference: document.querySelector("#profileRisk")?.value || "稳健",
     salesComfort: document.querySelector("#profileSales")?.value || "可以尝试",
     aiTools: document.querySelector("#profileAiTools")?.value.trim() || "",
+    recommendations: state.personalProfile.recommendations || [],
   };
   state.goal = {
     ...state.goal,
@@ -1394,6 +1410,125 @@ function saveProfile() {
   state.modal = null;
   saveState();
   render();
+}
+
+function analyzeProfile() {
+  const text = document.querySelector("#profileRawText")?.value.trim();
+  if (!text) {
+    alert("先用一段话描述你的职业、技能、资源、时间和赚钱想法。");
+    return;
+  }
+  const result = parseNaturalProfile(text);
+  state.personalProfile = {
+    ...state.personalProfile,
+    ...result.profile,
+    rawText: text,
+    recommendations: result.recommendations,
+  };
+  state.goal = {
+    ...state.goal,
+    weeklyHours: result.profile.weeklyHours || state.goal.weeklyHours,
+    riskPreference: result.profile.riskPreference || state.goal.riskPreference,
+  };
+  state.dailyAction = generateAction();
+  saveState();
+  state.modal = "profile";
+  render();
+}
+
+function parseNaturalProfile(text) {
+  const normalized = text.replace(/\s+/g, "");
+  const hoursMatch = text.match(/每周[^，。；;、\n]{0,8}?(\d+(?:\.\d+)?)\s*(?:个)?小时/);
+  const weeklyHours = hoursMatch ? Number(hoursMatch[1]) : state.personalProfile?.weeklyHours || state.goal.weeklyHours || 8;
+  const role = extractProfileRole(text);
+  const skills = pickPhrases(text, ["报价", "客户沟通", "销售", "售前", "方案", "交付", "内容", "剪辑", "写作", "AI工具", "运营", "设计", "产品", "行业经验"]);
+  const resources = pickResourcePhrases(text);
+  const riskPreference = /保守|稳一点|稳健|不想亏|别亏|低风险|安全/.test(normalized)
+    ? "稳健"
+    : /激进|大胆|高风险|快速放大|创业/.test(normalized)
+      ? "积极"
+      : state.personalProfile?.riskPreference || "稳健";
+  const salesComfort = /不想.*销售|不太想.*销售|不想强销售|抗拒销售|不会社交|怕推销|不想主动/.test(normalized)
+    ? "抗拒销售"
+    : /愿意.*销售|主动销售|能陌拜|能打电话|能成交/.test(normalized)
+      ? "愿意主动销售"
+      : "可以尝试";
+  const earningPreference = /求职|面试|跳槽|涨薪/.test(normalized)
+    ? "求职涨薪"
+    : /创业|项目|公司/.test(normalized)
+      ? "创业项目"
+      : /生意|门店|工厂|设备|产品销售/.test(normalized)
+        ? "小生意经营"
+        : /接单|服务|咨询|方案/.test(normalized)
+          ? "接单服务"
+          : "副业变现";
+  const incomePressure = extractProfilePressure(text);
+  const aiTools = pickPhrases(text, ["ChatGPT", "Claude", "Codex", "DeepSeek", "豆包", "即梦", "剪映", "通义", "Kimi"]);
+  const profile = {
+    rawText: text,
+    role,
+    incomePressure,
+    weeklyHours,
+    skills,
+    resources,
+    earningPreference,
+    riskPreference,
+    salesComfort,
+    aiTools,
+  };
+  return {
+    profile,
+    recommendations: buildProfileRecommendations(profile),
+  };
+}
+
+function extractProfileRole(text) {
+  const patterns = [
+    /(?:我是|我现在做|目前做|职业是|身份是)([^，。；;、\n]{2,18})/,
+    /(设备销售|产品经理|销售|售前|自由职业|老板|宝妈|老师|设计师|运营|程序员|工程师|咨询顾问)/,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return (match[1] || match[0]).replace(/，|。/g, "").trim();
+  }
+  return state.personalProfile?.role || "";
+}
+
+function extractProfilePressure(text) {
+  const match = text.match(/(想[^，。；;、\n]{2,24}|希望[^，。；;、\n]{2,24}|收入[^，。；;、\n]{2,24}|现金流[^，。；;、\n]{2,24})/);
+  return match ? match[0] : state.personalProfile?.incomePressure || "";
+}
+
+function pickPhrases(text, words) {
+  return words.filter((word) => text.toLowerCase().includes(word.toLowerCase())).join("、");
+}
+
+function pickResourcePhrases(text) {
+  const words = ["工厂老板", "客户资源", "老客户", "人脉", "行业资源", "渠道", "设备", "供应链", "社群", "私域", "粉丝"];
+  const picked = pickPhrases(text, words);
+  if (picked) return picked;
+  const match = text.match(/(?:有|手里有|认识)([^，。；;、\n]{2,24}(?:资源|客户|老板|渠道|人脉))/);
+  return match ? match[1] : "";
+}
+
+function buildProfileRecommendations(profile) {
+  const customer = profile.resources || "已有资源";
+  const lowPressure = profile.salesComfort === "抗拒销售";
+  const timeBox = profile.weeklyHours <= 6 ? "每次控制在 25 分钟内" : "每周固定 2-3 个推进时段";
+  const projectType =
+    profile.earningPreference === "小生意经营"
+      ? "优先做围绕现有客户资源的低成本成交验证"
+      : profile.earningPreference === "求职涨薪"
+        ? "优先把技能和案例整理成可展示作品"
+        : "优先做可快速验证付费意愿的接单/咨询项目";
+  const action = lowPressure
+    ? `先整理 1 个案例发给熟人、老客户或${customer}，用反馈代替强推`
+    : `联系 3 个${customer}，验证对方是否愿意为你的能力付费`;
+  return [
+    projectType,
+    `${timeBox}，下一步建议：${action}`,
+    "暂不建议重资产投入、囤货或承诺收益，先用真实反馈验证。",
+  ];
 }
 
 function saveGoal() {
