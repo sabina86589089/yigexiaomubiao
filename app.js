@@ -177,6 +177,7 @@ function snapshotState() {
   return {
     hasOnboarded: state.hasOnboarded,
     isPro: state.isPro,
+    personalProfile: state.personalProfile,
     goal: state.goal,
     projects: state.projects,
     records: state.records,
@@ -456,6 +457,7 @@ function renderHomePage() {
       <span class="pill orange">今日行动</span>
       <div class="action-text">${state.dailyAction.text}</div>
       <div class="hero-sub">预计 ${state.dailyAction.estimatedMinutes} 分钟 · ${state.dailyAction.projectName || "未关联项目"}</div>
+      <div class="notice">建议来源：${state.dailyAction.source || "目标进度与近期记录"}</div>
       <div class="button-row">
         <button class="primary-btn" data-action="complete-action">${state.dailyAction.status === "completed" ? "已完成" : "完成"}</button>
         <button class="secondary-btn" data-action="refresh-action">换一个</button>
@@ -689,7 +691,7 @@ function renderReviewPage() {
       </div>
       <div class="review-block">
         <h3>4. 下周行动参考</h3>
-        <ul>${review.actions.map((item, index) => `<li>${item} <button class="text-btn" data-set-action="${index}">设为今日行动</button></li>`).join("")}</ul>
+        <ul>${review.actions.map((item, index) => `<li>${item.text} <button class="text-btn" data-set-action="${index}">设为今日行动</button></li>`).join("")}</ul>
       </div>
       <div class="notice">以上内容基于你记录的数据生成，仅供复盘参考，不构成收益承诺或投资建议。</div>
     </section>
@@ -738,15 +740,24 @@ function buildReview() {
       ? `${watch.name} 本周净收益为 ${money(watch.weekNet)}。建议先复盘成本来源，暂停无明确回报的新增投入。`
       : "暂时没有明显亏损项目，但样本量有限，继续记录一周会更准确。";
   const projectName = best?.name || state.projects[0]?.name || "当前项目";
+  const suggestedProject = best || state.projects[0];
   const profileHint = profile.weeklyHours ? `按你每周可投入 ${profile.weeklyHours} 小时来安排，` : "";
+  const customerHint = suggestedProject?.targetCustomer || "潜在客户";
+  const firstAction = suggestedProject?.nextAction
+    ? { text: `${profileHint}${suggestedProject.nextAction}。`, minutes: actionMinutes(25, profile), source: "项目下一步" }
+    : { text: `${profileHint}围绕 ${projectName} 联系 3 个${customerHint}或相似品牌。`, minutes: actionMinutes(30, profile), source: "项目画像" };
+  const secondAction =
+    profile.salesComfort === "抗拒销售"
+      ? { text: `整理 1 个最近的成交案例，先发给熟人或老客户，不做强推。`, minutes: actionMinutes(25, profile), source: "个人画像" }
+      : { text: "整理 1 个最近的成交案例，发布成内容或发给客户。", minutes: actionMinutes(25, profile), source: "获客动作" };
   return {
     summary,
     best: bestText,
     watch: watchText,
     actions: [
-      `${profileHint}围绕 ${projectName} 联系 3 个潜在客户或相似品牌。`,
-      "整理 1 个最近的成交案例，发布成内容或发给客户。",
-      "复盘本周支出，标记一项可以暂停的低效成本。",
+      firstAction,
+      secondAction,
+      { text: "复盘本周支出，标记一项可以暂停的低效成本。", minutes: actionMinutes(20, profile), source: "成本控制" },
     ],
   };
 }
@@ -1627,10 +1638,12 @@ function deleteRecord(id) {
 function setReviewAction(index) {
   const action = buildReview().actions[index];
   if (!action) return;
+  const project = getActionProject();
   state.dailyAction = {
-    text: action.replace(/^围绕\s+/, "").replace(/。$/, ""),
-    projectName: getStats().bestProject?.name || state.projects[0]?.name || "当前项目",
-    estimatedMinutes: 30,
+    text: action.text.replace(/^围绕\s+/, "").replace(/。$/, ""),
+    projectName: project?.name || getStats().bestProject?.name || state.projects[0]?.name || "当前项目",
+    estimatedMinutes: action.minutes || 30,
+    source: action.source || "AI 周复盘",
     status: "pending",
   };
   state.activeTab = "home";
@@ -1806,21 +1819,62 @@ function refreshAction() {
   render();
 }
 
+function actionMinutes(baseMinutes, profile = state.personalProfile || {}) {
+  const hours = Number(profile.weeklyHours || state.goal.weeklyHours || 8);
+  if (hours <= 5) return Math.min(baseMinutes, 25);
+  if (hours >= 15) return Math.max(baseMinutes, 35);
+  return baseMinutes;
+}
+
+function getActionProject(stats = getStats()) {
+  const candidates = stats.projectStats.length ? stats.projectStats : state.projects;
+  const withNextAction = candidates.find((project) => project.nextAction && project.status !== "已结束");
+  if (withNextAction) return withNextAction;
+  const profitable = candidates.find((project) => project.weekNet > 0);
+  return profitable || stats.bestProject || candidates[0] || null;
+}
+
+function buildActionOptions(project, profile = state.personalProfile || {}, stats = getStats()) {
+  const projectName = project?.name || "当前项目";
+  const customer = project?.targetCustomer || "潜在客户";
+  const options = [];
+  if (project?.nextAction) {
+    options.push({ text: project.nextAction, minutes: actionMinutes(25, profile), source: "项目下一步" });
+  }
+  if (profile.salesComfort === "抗拒销售") {
+    options.push({
+      text: `整理 1 个${projectName}的案例，发给熟人或老客户试探反馈`,
+      minutes: actionMinutes(25, profile),
+      source: "个人画像",
+    });
+  } else {
+    options.push({
+      text: `联系 3 个${customer}，验证${projectName}的真实需求`,
+      minutes: actionMinutes(30, profile),
+      source: "项目画像",
+    });
+  }
+  options.push(
+    { text: `整理 1 个${projectName}的成交或交付案例`, minutes: actionMinutes(25, profile), source: "项目复盘" },
+    { text: `发布 1 条面向${customer}的成果内容`, minutes: actionMinutes(40, profile), source: "获客动作" },
+  );
+  if (stats.weekExpense > 0 || stats.weekNet < 0) {
+    options.push({ text: "复盘本周最大一笔支出，判断是否继续投入", minutes: actionMinutes(20, profile), source: "成本控制" });
+  }
+  options.push({ text: "记录今天的一笔收入、支出或行动", minutes: 10, source: "数据补全" });
+  return options;
+}
+
 function generateAction() {
   const stats = getStats();
-  const best = stats.bestProject || state.projects[0];
-  const actions = [
-    { text: `联系 3 个和${best?.name || "当前项目"}相关的潜在客户`, minutes: 30 },
-    { text: "整理 1 个最近的成交案例", minutes: 25 },
-    { text: "发布 1 条展示成果的内容", minutes: 40 },
-    { text: "复盘本周最大一笔支出", minutes: 20 },
-    { text: "记录今天的一笔收入、支出或行动", minutes: 10 },
-  ];
-  const pick = actions[Math.floor(Math.random() * actions.length)];
+  const best = getActionProject(stats);
+  const actions = buildActionOptions(best, state.personalProfile, stats);
+  const pick = actions[0];
   return {
     text: pick.text,
     projectName: best?.name || "当前项目",
     estimatedMinutes: pick.minutes,
+    source: pick.source,
     status: "pending",
   };
 }
