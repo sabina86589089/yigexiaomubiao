@@ -517,8 +517,33 @@ function getMonthlyNeed(remaining) {
   return remaining / months;
 }
 
+function getRecordExamples() {
+  const project = getProject(state.recordProjectId) || getActionProject() || state.projects[0];
+  const projectName = project?.name || "当前项目";
+  if (project?.targetCustomer || project?.type === "实体小生意") {
+    return [
+      { label: "收入 800", text: `${projectName}收到客户付款800元` },
+      { label: "支出 120", text: `${projectName}工具订阅支出120元` },
+      { label: "跟进 3 个客户", text: `${projectName}跟进了3个潜在客户` },
+    ];
+  }
+  if (project?.type === "其他" && project?.name?.includes("求职")) {
+    return [
+      { label: "投递 3 个岗位", text: `${projectName}投递了3个岗位` },
+      { label: "支出 60", text: `${projectName}简历优化支出60元` },
+      { label: "面试 1 次", text: `${projectName}完成1次面试沟通` },
+    ];
+  }
+  return [
+    { label: "收入 800", text: `${projectName}收入800元` },
+    { label: "支出 120", text: `${projectName}支出120元` },
+    { label: "联系 3 个客户", text: `${projectName}联系了3个潜在客户` },
+  ];
+}
+
 function renderRecordPage() {
   const records = [...state.records].sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
+  const examples = getRecordExamples();
   return `
     ${renderTopbar("记录进展", "10 秒记一笔")}
     <section class="card">
@@ -532,15 +557,13 @@ function renderRecordPage() {
         </div>
         <div class="field">
           <label>今天发生了什么？</label>
-          <textarea id="recordText" placeholder="例如：今天小红书接广收入 800，投流花了 120">${state.recordInputText || ""}</textarea>
+          <textarea id="recordText" placeholder="例如：${examples[0].text}">${state.recordInputText || ""}</textarea>
         </div>
         <div class="chips">
-          <button class="chip" data-example="今天小红书接广收入 800">收入 800</button>
-          <button class="chip" data-example="视频号投流花了 120">支出 120</button>
-          <button class="chip" data-example="联系了 3 个潜在客户">联系 3 个客户</button>
+          ${examples.map((item) => `<button class="chip" data-example="${item.text}">${item.label}</button>`).join("")}
         </div>
         <div class="button-row">
-          <button class="secondary-btn" data-action="voice-input">语音/键盘输入</button>
+          <button class="secondary-btn" data-action="voice-input">使用系统语音输入</button>
           <button class="primary-btn" data-action="parse-record">AI 识别</button>
         </div>
         ${state.recordNotice ? `<div class="notice auth-error">${state.recordNotice}</div>` : ""}
@@ -651,6 +674,7 @@ function renderProjectDetail(project) {
         <div><strong>变现方式</strong><span>${project.monetization || "未填写"}</span></div>
         <div><strong>阶段</strong><span>${project.stage || project.status || "未填写"}</span></div>
         <div><strong>下一步</strong><span>${project.nextAction || "未填写"}</span></div>
+        <div><strong>风险提醒</strong><span>${project.description || "先低成本验证，不承诺收益，不盲目加大投入。"}</span></div>
       </div>
     </section>
     <section class="section card">
@@ -868,37 +892,30 @@ function renderOnboarding() {
       <section class="card">
         <div class="brand">亿</div>
         <div class="eyebrow">AI 赚钱目标作战台</div>
-        <h1 class="title">先设一个你想盯住的赚钱目标</h1>
-        <p class="hero-sub">我们帮你记录进展、复盘项目，并生成下一步行动参考。</p>
+        <h1 class="title">先说说你的情况</h1>
+        <p class="hero-sub">你做什么、会什么、有什么资源、每周能投入多久。AI 会先帮你生成画像、推荐项目和第一步行动。</p>
         <div class="form section">
           <div class="field">
-            <label>目标金额</label>
-            <select id="onboardTarget">
-              <option value="100000" selected>10 万</option>
-              <option value="300000">30 万</option>
-              <option value="500000">50 万</option>
-              <option value="1000000">100 万</option>
-            </select>
+            <label>你的真实情况</label>
+            <textarea id="onboardProfileText" placeholder="例如：我现在做设备销售，熟悉报价和客户沟通，有一些工厂老板资源。每周能投入6小时，想稳一点做副业，不太想强销售。"></textarea>
           </div>
-          <div class="field">
-            <label>截止日期</label>
-            <input id="onboardDeadline" type="date" value="2026-12-31" />
-          </div>
-          <div class="field">
-            <label>当前已完成</label>
-            <input id="onboardInitial" type="number" value="0" min="0" />
-          </div>
-          <div class="field">
-            <label>起步模板</label>
-            <select id="onboardTemplate">
-              ${Object.entries(startTemplates).map(([key, item]) => `<option value="${key}" ${key === "blank" ? "selected" : ""}>${item.label}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field">
-            <label>第一个项目名称</label>
-            <input id="onboardProject" placeholder="可以先不填，之后在项目页添加" />
-          </div>
-          <button class="primary-btn" data-action="finish-onboarding">开始我的作战台</button>
+          <details class="advanced-settings">
+            <summary>调整目标金额</summary>
+            <div class="field">
+              <label>目标金额</label>
+              <select id="onboardTarget">
+                <option value="100000" selected>10 万</option>
+                <option value="300000">30 万</option>
+                <option value="500000">50 万</option>
+                <option value="1000000">100 万</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>截止日期</label>
+              <input id="onboardDeadline" type="date" value="2026-12-31" />
+            </div>
+          </details>
+          <button class="primary-btn" data-action="finish-onboarding">AI 生成我的赚钱作战台</button>
           <div class="notice">AI 内容仅供记录和复盘参考，不承诺任何收入结果。</div>
         </div>
       </section>
@@ -944,6 +961,7 @@ function renderProfileModal() {
   const profile = state.personalProfile || {};
   const recommendations = profile.recommendations || [];
   const projectDrafts = profile.projectDrafts || [];
+  const hasProfileResult = Boolean(profile.role || profile.skills || profile.resources || recommendations.length);
   return `
     <div class="modal-backdrop">
       <section class="modal">
@@ -958,6 +976,18 @@ function renderProfileModal() {
             recommendations.length
               ? `<div class="profile-suggestions">${recommendations.map((item) => `<div>${item}</div>`).join("")}</div>`
               : `<div class="notice">先说一段真实情况，系统会自动提取画像并给出推荐。后续可接入大模型，让识别更细。</div>`
+          }
+          ${
+            hasProfileResult
+              ? `<div class="profile-summary-grid">
+                  <div><span>身份</span><strong>${profile.role || "未识别"}</strong></div>
+                  <div><span>技能</span><strong>${profile.skills || "未识别"}</strong></div>
+                  <div><span>资源</span><strong>${profile.resources || "未识别"}</strong></div>
+                  <div><span>时间</span><strong>${profile.weeklyHours || 0} 小时/周</strong></div>
+                  <div><span>风险</span><strong>${profile.riskPreference || "稳健"}</strong></div>
+                  <div><span>销售</span><strong>${profile.salesComfort || "可以尝试"}</strong></div>
+                </div>`
+              : ""
           }
           ${
             projectDrafts.length
@@ -984,31 +1014,34 @@ function renderProfileModal() {
                 </div>`
               : ""
           }
-          <div class="field"><label>当前职业/身份</label><input id="profileRole" placeholder="例如：设备销售 / 产品经理 / 自由职业" value="${profile.role || ""}" /></div>
-          <div class="field"><label>收入压力/当前处境</label><input id="profilePressure" placeholder="例如：想增加副业收入、转型、现金流紧" value="${profile.incomePressure || ""}" /></div>
-          <div class="field"><label>每周可投入时间</label><input id="profileHours" type="number" min="0" value="${profile.weeklyHours || state.goal.weeklyHours || 0}" /></div>
-          <div class="field"><label>技能</label><textarea id="profileSkills" placeholder="销售、报价、内容、交付、AI工具、行业经验等">${profile.skills || ""}</textarea></div>
-          <div class="field"><label>资源</label><textarea id="profileResources" placeholder="客户资源、人脉、行业资源、设备、渠道等">${profile.resources || ""}</textarea></div>
-          <div class="field">
-            <label>赚钱偏好</label>
-            <select id="profilePreference">
-              ${["副业变现", "接单服务", "小生意经营", "求职涨薪", "创业项目"].map((item) => `<option ${profile.earningPreference === item ? "selected" : ""}>${item}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field">
-            <label>风险偏好</label>
-            <select id="profileRisk">
-              ${["保守", "稳健", "积极"].map((item) => `<option ${profile.riskPreference === item ? "selected" : ""}>${item}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field">
-            <label>销售接受度</label>
-            <select id="profileSales">
-              ${["抗拒销售", "可以尝试", "愿意主动销售"].map((item) => `<option ${profile.salesComfort === item ? "selected" : ""}>${item}</option>`).join("")}
-            </select>
-          </div>
-          <div class="field"><label>常用 AI 工具</label><input id="profileAiTools" placeholder="例如：ChatGPT、Claude、豆包、即梦、剪映" value="${profile.aiTools || ""}" /></div>
-          <button class="primary-btn" data-action="save-profile">保存画像</button>
+          <details class="advanced-settings">
+            <summary>展开编辑识别结果</summary>
+            <div class="field"><label>当前职业/身份</label><input id="profileRole" placeholder="例如：设备销售 / 产品经理 / 自由职业" value="${profile.role || ""}" /></div>
+            <div class="field"><label>收入压力/当前处境</label><input id="profilePressure" placeholder="例如：想增加副业收入、转型、现金流紧" value="${profile.incomePressure || ""}" /></div>
+            <div class="field"><label>每周可投入时间</label><input id="profileHours" type="number" min="0" value="${profile.weeklyHours || state.goal.weeklyHours || 0}" /></div>
+            <div class="field"><label>技能</label><textarea id="profileSkills" placeholder="销售、报价、内容、交付、AI工具、行业经验等">${profile.skills || ""}</textarea></div>
+            <div class="field"><label>资源</label><textarea id="profileResources" placeholder="客户资源、人脉、行业资源、设备、渠道等">${profile.resources || ""}</textarea></div>
+            <div class="field">
+              <label>赚钱偏好</label>
+              <select id="profilePreference">
+                ${["副业变现", "接单服务", "小生意经营", "求职涨薪", "创业项目"].map((item) => `<option ${profile.earningPreference === item ? "selected" : ""}>${item}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label>风险偏好</label>
+              <select id="profileRisk">
+                ${["保守", "稳健", "积极"].map((item) => `<option ${profile.riskPreference === item ? "selected" : ""}>${item}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label>销售接受度</label>
+              <select id="profileSales">
+                ${["抗拒销售", "可以尝试", "愿意主动销售"].map((item) => `<option ${profile.salesComfort === item ? "selected" : ""}>${item}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field"><label>常用 AI 工具</label><input id="profileAiTools" placeholder="例如：ChatGPT、Claude、豆包、即梦、剪映" value="${profile.aiTools || ""}" /></div>
+            <button class="primary-btn" data-action="save-profile">保存画像</button>
+          </details>
         </div>
       </section>
     </div>
@@ -1328,32 +1361,20 @@ function handleAction(action) {
 }
 
 function finishOnboarding() {
-  const target = Number(document.querySelector("#onboardTarget").value || 1000000);
-  const deadline = document.querySelector("#onboardDeadline").value || "2026-12-31";
-  const initial = Number(document.querySelector("#onboardInitial").value || 0);
-  const projectName = document.querySelector("#onboardProject").value.trim();
-  const templateKey = document.querySelector("#onboardTemplate")?.value || "side";
-  const template = startTemplates[templateKey] || startTemplates.side;
-  const projects =
-    templateKey === "blank" && !projectName
-      ? []
-      : template.projects.map(([name, type], index) => ({
-          id: uid(),
-          name: index === 0 && projectName ? projectName : name,
-          type,
-          status: "验证中",
-          description: "",
-        }));
+  const text = document.querySelector("#onboardProfileText")?.value.trim();
+  if (!text) {
+    alert("先用一段话说说你的职业、技能、资源和时间。");
+    return;
+  }
+  const target = Number(document.querySelector("#onboardTarget")?.value || 100000);
+  const deadline = document.querySelector("#onboardDeadline")?.value || "2026-12-31";
+  const plan = createOnboardingPlan(text, { targetAmount: target, deadline });
   state.hasOnboarded = true;
-  state.goal = { ...state.goal, targetAmount: target, initialAmount: initial, deadline };
-  state.projects = projects;
+  state.goal = plan.goal;
+  state.personalProfile = plan.profile;
+  state.projects = plan.projects;
   state.records = [];
-  state.dailyAction = {
-    text: "记录今天的一笔收入、支出或行动",
-    projectName: projects[0]?.name || "",
-    estimatedMinutes: 10,
-    status: "pending",
-  };
+  state.dailyAction = plan.dailyAction;
   saveState();
   render();
 }
@@ -1420,20 +1441,21 @@ async function syncNow() {
 }
 
 function saveProfile() {
-  const weeklyHours = Number(document.querySelector("#profileHours")?.value || 0);
+  const current = state.personalProfile || {};
+  const weeklyHours = Number(document.querySelector("#profileHours")?.value || current.weeklyHours || state.goal.weeklyHours || 0);
   state.personalProfile = {
-    rawText: document.querySelector("#profileRawText")?.value.trim() || state.personalProfile.rawText || "",
-    role: document.querySelector("#profileRole")?.value.trim() || "",
-    incomePressure: document.querySelector("#profilePressure")?.value.trim() || "",
+    rawText: document.querySelector("#profileRawText")?.value.trim() || current.rawText || "",
+    role: document.querySelector("#profileRole")?.value.trim() || current.role || "",
+    incomePressure: document.querySelector("#profilePressure")?.value.trim() || current.incomePressure || "",
     weeklyHours,
-    skills: document.querySelector("#profileSkills")?.value.trim() || "",
-    resources: document.querySelector("#profileResources")?.value.trim() || "",
-    earningPreference: document.querySelector("#profilePreference")?.value || "副业变现",
-    riskPreference: document.querySelector("#profileRisk")?.value || "稳健",
-    salesComfort: document.querySelector("#profileSales")?.value || "可以尝试",
-    aiTools: document.querySelector("#profileAiTools")?.value.trim() || "",
-    recommendations: state.personalProfile.recommendations || [],
-    projectDrafts: state.personalProfile.projectDrafts || [],
+    skills: document.querySelector("#profileSkills")?.value.trim() || current.skills || "",
+    resources: document.querySelector("#profileResources")?.value.trim() || current.resources || "",
+    earningPreference: document.querySelector("#profilePreference")?.value || current.earningPreference || "副业变现",
+    riskPreference: document.querySelector("#profileRisk")?.value || current.riskPreference || "稳健",
+    salesComfort: document.querySelector("#profileSales")?.value || current.salesComfort || "可以尝试",
+    aiTools: document.querySelector("#profileAiTools")?.value.trim() || current.aiTools || "",
+    recommendations: current.recommendations || [],
+    projectDrafts: current.projectDrafts || [],
   };
   state.goal = {
     ...state.goal,
@@ -1539,7 +1561,7 @@ function pickPhrases(text, words) {
 }
 
 function pickResourcePhrases(text) {
-  const words = ["工厂老板", "客户资源", "老客户", "人脉", "行业资源", "渠道", "设备", "供应链", "社群", "私域", "粉丝"];
+  const words = ["工厂老板", "客户资源", "老客户", "人脉", "行业资源", "渠道", "供应链", "社群", "私域", "粉丝"];
   const picked = pickPhrases(text, words);
   if (picked) return picked;
   const match = text.match(/(?:有|手里有|认识)([^，。；;、\n]{2,24}(?:资源|客户|老板|渠道|人脉))/);
@@ -1600,15 +1622,16 @@ function buildProjectDrafts(profile) {
   return [mainDraft, contentDraft];
 }
 
-function addProfileProjectDraft(index) {
-  const draft = state.personalProfile?.projectDrafts?.[index];
-  if (!draft) return null;
-  const existing = state.projects.find((project) => project.name === draft.name);
-  if (existing) {
-    alert("这个推荐项目已经添加过了。");
-    return existing;
-  }
-  const project = {
+function shortActionText(text = "") {
+  const firstClause = String(text)
+    .replace(/^下一步建议：/, "")
+    .split(/[，,。；;]/)[0]
+    .trim();
+  return firstClause.length > 18 ? `${firstClause.slice(0, 18)}...` : firstClause || "推进一个小动作";
+}
+
+function projectFromDraft(draft) {
+  return {
     id: uid(),
     name: draft.name,
     type: draft.type || "接单服务",
@@ -1619,12 +1642,58 @@ function addProfileProjectDraft(index) {
     nextAction: draft.nextAction || "",
     description: draft.riskWarning || "",
   };
+}
+
+function createOnboardingPlan(text, options = {}) {
+  const result = parseNaturalProfile(text);
+  const firstDraft = result.projectDrafts[0];
+  const projects = firstDraft ? [projectFromDraft(firstDraft)] : [];
+  const targetAmount = Number(options.targetAmount || 100000);
+  const deadline = options.deadline || "2026-12-31";
+  const goal = {
+    ...structuredClone(defaultState.goal),
+    targetAmount,
+    initialAmount: 0,
+    deadline,
+    weeklyHours: result.profile.weeklyHours || defaultState.goal.weeklyHours,
+    riskPreference: result.profile.riskPreference || defaultState.goal.riskPreference,
+  };
+  return {
+    goal,
+    profile: {
+      ...structuredClone(defaultState.personalProfile),
+      ...result.profile,
+      recommendations: result.recommendations,
+      projectDrafts: result.projectDrafts,
+    },
+    projects,
+    dailyAction: {
+      text: shortActionText(projects[0]?.nextAction || "记录今天的一笔收入、支出或行动"),
+      projectName: projects[0]?.name || "",
+      estimatedMinutes: actionMinutes(25, result.profile),
+      source: projects[0] ? "AI 推荐项目" : "数据补全",
+      detail: projects[0]?.nextAction || "",
+      status: "pending",
+    },
+  };
+}
+
+function addProfileProjectDraft(index) {
+  const draft = state.personalProfile?.projectDrafts?.[index];
+  if (!draft) return null;
+  const existing = state.projects.find((project) => project.name === draft.name);
+  if (existing) {
+    alert("这个推荐项目已经添加过了。");
+    return existing;
+  }
+  const project = projectFromDraft(draft);
   state.projects.push(project);
   state.dailyAction = {
-    text: project.nextAction || `推进 ${project.name} 的第一个客户验证`,
+    text: shortActionText(project.nextAction || `推进 ${project.name} 的第一个客户验证`),
     projectName: project.name,
     estimatedMinutes: actionMinutes(25),
     source: "AI 推荐项目",
+    detail: project.nextAction || "",
     status: "pending",
   };
   state.modal = null;
@@ -2110,10 +2179,11 @@ function generateAction() {
   const actions = buildActionOptions(best, state.personalProfile, stats);
   const pick = actions[0];
   return {
-    text: pick.text,
+    text: shortActionText(pick.text),
     projectName: best?.name || "当前项目",
     estimatedMinutes: pick.minutes,
     source: pick.source,
+    detail: pick.text,
     status: "pending",
   };
 }
