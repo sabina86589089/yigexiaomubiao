@@ -824,6 +824,30 @@ function renderMePage() {
               </div>
             </div>
             <div class="profile-block">
+              <strong>推荐服务包</strong>
+              <div class="profile-list compact">
+                ${profileDisplay.servicePackages.map((item) => `<div><span>${item}</span></div>`).join("")}
+              </div>
+            </div>
+            <div class="profile-block">
+              <strong>内容选题</strong>
+              <div class="profile-list compact">
+                ${profileDisplay.contentTopics.map((item) => `<div><span>${item}</span></div>`).join("")}
+              </div>
+            </div>
+            <div class="profile-block">
+              <strong>第一批客户</strong>
+              <div class="profile-list compact">
+                ${profileDisplay.firstCustomers.map((item) => `<div><span>${item}</span></div>`).join("")}
+              </div>
+            </div>
+            <div class="profile-block">
+              <strong>不建议做</strong>
+              <div class="profile-list compact">
+                ${profileDisplay.avoidList.map((item) => `<div><span>${item}</span></div>`).join("")}
+              </div>
+            </div>
+            <div class="profile-block">
               <strong>两年百万路线图</strong>
               <ol class="roadmap-list">${profileDisplay.roadmap.map((item) => `<li>${item}</li>`).join("")}</ol>
             </div>
@@ -1171,7 +1195,10 @@ function renderConfirmModal() {
                       <option value="action" ${item.recordType === "action" ? "selected" : ""}>行动</option>
                     </select>
                   </div>
-                  <div class="field"><label>金额</label><input type="number" data-draft="${index}" data-field="amount" value="${item.amount || 0}" /></div>
+                  <div class="field">
+                    <label>金额${item.currency === "USD" ? `（${item.originalAmount} USD，按 ${item.exchangeRate} 换算）` : ""}</label>
+                    <input type="number" data-draft="${index}" data-field="amount" value="${item.amount || 0}" />
+                  </div>
                   <div class="field">
                     <label>项目</label>
                     <select data-draft="${index}" data-field="projectId">
@@ -1676,6 +1703,7 @@ function buildProfileDisplay(profile = {}, projects = []) {
     .filter(Boolean)
     .slice(0, 5);
   const firstProject = projects.find((project) => project?.nextAction || project?.name) || {};
+  const firstCustomer = firstProject.targetCustomer || "已有资源中的潜在付费客户";
   const firstAction = firstProject.nextAction || "整理1个可展示案例";
   const mainProject = firstProject.name || monetizationTags[0] || "个人能力变现项目";
   const positioning =
@@ -1691,6 +1719,29 @@ function buildProfileDisplay(profile = {}, projects = []) {
     identityTags: identityTags.length ? identityTags : ["个人能力变现者"],
     assetTags: assetTags.length ? assetTags : ["经验资产", "执行能力", "学习能力"],
     monetizationTags: monetizationTags.length ? monetizationTags : ["咨询服务", "项目制交付", "内容获客"],
+    servicePackages: uniqueList([
+      hasAi && hasB2b ? "AI业务诊断包：梳理业务流程、痛点和可自动化环节" : "",
+      hasAi && hasB2b ? "系统原型包：用AI快速生成可演示的业务系统原型" : "",
+      hasB2b ? "方案材料包：PRD、解决方案、投标/售前材料整理" : "",
+      hasContent ? "行业内容包：行业拆解图文/短视频，导向咨询线索" : "",
+    ]).slice(0, 4),
+    contentTopics: uniqueList([
+      hasContent ? "用AI拆解一个行业的赚钱机会" : "",
+      hasAi && hasB2b ? "我如何用AI快速做出一个业务系统原型" : "",
+      hasB2b ? "中小企业做数字化最容易踩的坑" : "",
+      firstProject.name ? `${firstProject.name}真实案例复盘` : "",
+    ]).slice(0, 4),
+    firstCustomers: uniqueList([
+      firstCustomer,
+      hasB2b ? "正在招产品/运营/数字化岗位但缺方案能力的小企业" : "",
+      hasContent ? "从小红书/抖音行业拆解内容咨询过的人" : "",
+      "过往项目里的老客户、熟人和转介绍对象",
+    ]).slice(0, 4),
+    avoidList: [
+      "不要承诺稳赚、保收益或一定成交。",
+      "不要一开始承诺完整开发交付，先卖诊断、原型和方案。",
+      "不要先重资产投入、囤货或扩大团队，先验证真实付款。",
+    ],
     roadmap: [
       `0-30天：${shortActionText(firstAction)}，沉淀1个可展示案例。`,
       `1-3个月：围绕「${mainProject}」找到3个真实需求，验证诊断费或小额服务费。`,
@@ -2018,7 +2069,7 @@ function parseTextToDrafts(text, preferredProjectId = "") {
 }
 
 function classifyRecordType(text) {
-  const incomeWords = /(收入|进账|赚|赚了|收款|收到|到账|接广|成交|尾款|分成|工资|提成|回款|销售|卖出|卖了|客户付|客户付款)/;
+  const incomeWords = /(收入|进账|赚|赚了|收|收了|收款|收到|到账|接广|成交|尾款|分成|工资|提成|回款|销售|卖出|卖了|客户付|客户付款)/;
   const expenseWords = /(花|花了|花费|支出|费用|成本|付|付款|支付|投流|买|购买|发了|用了|扣|扣款|亏|充值|订阅|会员|房贷|房租|水电|物业|运费|服务费|手续费|采购|进货)/;
   const hasIncome = incomeWords.test(text);
   const hasExpense = expenseWords.test(text);
