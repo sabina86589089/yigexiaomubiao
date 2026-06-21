@@ -461,6 +461,41 @@ button {
   background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
 }
 
+.paid-report-card {
+  border-color: #fed7aa;
+  background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
+}
+
+.paid-report-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.paid-report-list article {
+  display: grid;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.paid-report-list strong {
+  color: #9a3412;
+  font-size: 13px;
+}
+
+.paid-report-list ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .ai-reason-box,
 .ai-diagnosis-card,
 .ai-response-card {

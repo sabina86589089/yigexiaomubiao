@@ -831,6 +831,7 @@ function renderMePage() {
   const firstDaySummary = buildFirstDaySummary(profile, state.projects, state.dailyAction);
   const contentPack = buildContentStarterPack(profile, state.projects);
   const coachInsight = buildAICoachInsight();
+  const paidReport = buildPaidDiagnosisReport();
   return `
     ${renderTopbar("我的", "设置与内测")}
     <section class="card">
@@ -860,6 +861,28 @@ function renderMePage() {
               <button class="primary-btn" data-action="copy-profile-share">复制画像文案</button>
               <button class="secondary-btn" data-tab="record">记录第一笔</button>
             </div>
+          </section>
+          <section class="section card paid-report-card">
+            <span class="pill orange">${paidReport.priceLabel}</span>
+            <div class="action-text">${paidReport.title}</div>
+            <div class="hero-sub">${paidReport.summary}</div>
+            <div class="paid-report-list">
+              ${paidReport.sections
+                .map(
+                  (section) => `
+                    <article>
+                      <strong>${section.title}</strong>
+                      <ul>${section.items.map((item) => `<li>${item}</li>`).join("")}</ul>
+                    </article>
+                  `,
+                )
+                .join("")}
+            </div>
+            <div class="button-row">
+              <button class="primary-btn" data-action="copy-paid-report">复制诊断报告</button>
+              <button class="secondary-btn" data-action="copy-share-link">复制体验链接</button>
+            </div>
+            <div class="notice">${paidReport.boundary}</div>
           </section>
           <section class="section card ai-diagnosis-card">
             <span class="pill blue">AI 诊断报告</span>
@@ -1515,6 +1538,7 @@ function handleAction(action) {
   }
   if (action === "copy-share-link") copyShareLink();
   if (action === "copy-profile-share") copyProfileShareText();
+  if (action === "copy-paid-report") copyPaidDiagnosisReport();
   if (action === "copy-self-intro") copySelfIntroText();
   if (action === "copy-content-pack") copyContentPackText();
   if (action === "send-feedback") sendFeedback();
@@ -1992,6 +2016,67 @@ function buildProfileShareText(profile = {}, projects = []) {
     "我用这个工具做自己的赚钱目标作战台：",
     "https://sabina86589089.github.io/yigexiaomubiao/",
   ].join("\n");
+}
+
+function buildPaidDiagnosisReport(profile = state.personalProfile || {}, projects = state.projects || [], dailyAction = state.dailyAction || {}) {
+  const display = buildProfileDisplay(profile, projects);
+  const firstDay = buildFirstDaySummary(profile, projects, dailyAction);
+  const coach = buildAICoachInsight();
+  const contentPack = buildContentStarterPack(profile, projects);
+  const title = "AI个人赚钱画像诊断";
+  const priceLabel = "内测交付价 ¥99";
+  const summary = `基于你的经历、技能、资源和目标，AI 判断你可以先从「${firstDay.firstProject}」切入，用小服务验证真实需求。`;
+  const sections = [
+    {
+      title: "个人商业化标签",
+      items: [display.positioning, ...display.identityTags.slice(0, 4)],
+    },
+    {
+      title: "最适合先做的项目",
+      items: [firstDay.firstProject, coach.diagnosis.bestPath, firstDay.servicePackage],
+    },
+    {
+      title: "第一批目标客户",
+      items: display.firstCustomers.slice(0, 3),
+    },
+    {
+      title: "7天行动计划",
+      items: [
+        firstDay.firstAction,
+        coach.diagnosis.next7Days,
+        "每天记录一次客户反馈、收入、支出或行动结果。",
+      ],
+    },
+    {
+      title: "内容获客选题",
+      items: contentPack.topics.map((item) => item.title).slice(0, 3),
+    },
+    {
+      title: "不建议做",
+      items: display.avoidList,
+    },
+  ].map((section) => ({
+    ...section,
+    items: uniqueList(section.items.filter(Boolean)).slice(0, 4),
+  }));
+  const boundary = "本报告用于记录、复盘和行动参考，不承诺收益、不保证成交，不构成投资、职业或创业成功建议。";
+  const copyText = [
+    `# ${title}`,
+    priceLabel,
+    "",
+    summary,
+    "",
+    ...sections.flatMap((section) => [`## ${section.title}`, ...section.items.map((item) => `- ${item}`), ""]),
+    boundary,
+  ].join("\n");
+  return {
+    title,
+    priceLabel,
+    summary,
+    sections,
+    boundary,
+    copyText,
+  };
 }
 
 function buildProjectDrafts(profile) {
@@ -2581,6 +2666,16 @@ async function copyProfileShareText() {
     alert("已复制画像分享文案。");
   } catch {
     prompt("复制这段画像文案：", text);
+  }
+}
+
+async function copyPaidDiagnosisReport() {
+  const text = buildPaidDiagnosisReport().copyText;
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("已复制付费诊断报告。");
+  } catch {
+    prompt("复制这份诊断报告：", text);
   }
 }
 
