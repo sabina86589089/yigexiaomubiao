@@ -466,6 +466,47 @@ button {
   background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
 }
 
+.offer-strip {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.offer-strip strong {
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.offer-strip span {
+  color: #c2410c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.paid-deliverables {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.paid-deliverables div {
+  min-height: 46px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff;
+  color: #7c2d12;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+  padding: 9px 10px;
+}
+
 .paid-report-list {
   display: grid;
   gap: 10px;
@@ -489,6 +530,30 @@ button {
 .paid-report-list ul {
   display: grid;
   gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.purchase-box {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+}
+
+.purchase-box strong {
+  color: #9a3412;
+  font-size: 14px;
+}
+
+.purchase-box ol {
+  display: grid;
+  gap: 7px;
   margin: 0;
   padding-left: 18px;
   color: #374151;

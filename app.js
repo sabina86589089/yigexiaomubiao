@@ -64,6 +64,10 @@ const startTemplates = {
   },
 };
 const config = window.YGXMB_CONFIG || {};
+const salesContact = {
+  wechat: config.SALES_WECHAT || "请配置运营微信号",
+  paymentHint: config.PAYMENT_HINT || "微信/支付宝转账均可，付款后发送截图和个人资料。",
+};
 const cloud = {
   configured: Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY && window.supabase),
   client: null,
@@ -865,7 +869,14 @@ function renderMePage() {
           <section class="section card paid-report-card">
             <span class="pill orange">${paidReport.priceLabel}</span>
             <div class="action-text">${paidReport.title}</div>
-            <div class="hero-sub">${paidReport.summary}</div>
+            <div class="hero-sub">${paidReport.valuePromise}</div>
+            <div class="offer-strip">
+              <strong>${paidReport.summary}</strong>
+              <span>${paidReport.limitedOffer}</span>
+            </div>
+            <div class="paid-deliverables">
+              ${paidReport.deliverables.map((item) => `<div>${item}</div>`).join("")}
+            </div>
             <div class="paid-report-list">
               ${paidReport.sections
                 .map(
@@ -878,9 +889,14 @@ function renderMePage() {
                 )
                 .join("")}
             </div>
+            <div class="purchase-box">
+              <strong>${paidReport.payment.title}</strong>
+              <ol>${paidReport.purchaseSteps.map((item) => `<li>${item}</li>`).join("")}</ol>
+              <div class="notice">${paidReport.payment.copy}</div>
+            </div>
             <div class="button-row">
-              <button class="primary-btn" data-action="copy-paid-report">复制诊断报告</button>
-              <button class="secondary-btn" data-action="copy-share-link">复制体验链接</button>
+              <button class="primary-btn" data-action="copy-purchase-guide">复制购买说明</button>
+              <button class="secondary-btn" data-action="copy-paid-report">复制报告</button>
             </div>
             <div class="notice">${paidReport.boundary}</div>
           </section>
@@ -1538,6 +1554,7 @@ function handleAction(action) {
   }
   if (action === "copy-share-link") copyShareLink();
   if (action === "copy-profile-share") copyProfileShareText();
+  if (action === "copy-purchase-guide") copyPurchaseGuide();
   if (action === "copy-paid-report") copyPaidDiagnosisReport();
   if (action === "copy-self-intro") copySelfIntroText();
   if (action === "copy-content-pack") copyContentPackText();
@@ -2025,7 +2042,17 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
   const contentPack = buildContentStarterPack(profile, projects);
   const title = "AI个人赚钱画像诊断";
   const priceLabel = "内测交付价 ¥99";
-  const summary = `基于你的经历、技能、资源和目标，AI 判断你可以先从「${firstDay.firstProject}」切入，用小服务验证真实需求。`;
+  const summary = `基于你的${display.positioning}画像，AI 会先整理方向，我再做一次人工复核，避免只给你几条泛泛建议。`;
+  const valuePromise = `付款后交付「AI初诊 + 人工复核 + 7天行动计划」：帮你看清先做什么、找谁验证、今天怎么开始。`;
+  const limitedOffer = "内测限 10 人，适合想用 AI 做副业/接单/转型但方向不清的人。";
+  const deliverables = [
+    "1份个人商业化诊断报告",
+    "1个优先项目建议",
+    "1组第一批客户画像",
+    "1份7天行动计划",
+    "3条内容获客选题",
+    "1次人工复核优化",
+  ];
   const sections = [
     {
       title: "个人商业化标签",
@@ -2059,21 +2086,48 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     ...section,
     items: uniqueList(section.items.filter(Boolean)).slice(0, 4),
   }));
+  const purchaseSteps = [
+    `添加运营微信：${salesContact.wechat}`,
+    "发送你的背景、技能、资源、目标金额和每周可投入时间。",
+    "确认内测名额后付款 99 元。",
+    "付款后发送截图，系统生成初稿，我再做一次人工复核。",
+    "交付诊断报告，并邀请你连续记录 7 天行动结果。",
+  ];
+  const payment = {
+    title: "购买与付款方式",
+    copy: `${salesContact.paymentHint} 当前版本先走人工确认，暂不做自动扣款；这样更适合内测阶段收集真实反馈。`,
+  };
   const boundary = "本报告用于记录、复盘和行动参考，不承诺收益、不保证成交，不构成投资、职业或创业成功建议。";
   const copyText = [
     `# ${title}`,
     priceLabel,
     "",
     summary,
+    valuePromise,
+    limitedOffer,
+    "",
+    "## 你会拿到",
+    ...deliverables.map((item) => `- ${item}`),
+    "",
+    "## 购买流程",
+    ...purchaseSteps.map((item) => `- ${item}`),
     "",
     ...sections.flatMap((section) => [`## ${section.title}`, ...section.items.map((item) => `- ${item}`), ""]),
+    `## ${payment.title}`,
+    payment.copy,
+    "",
     boundary,
   ].join("\n");
   return {
     title,
     priceLabel,
     summary,
+    valuePromise,
+    limitedOffer,
+    deliverables,
     sections,
+    purchaseSteps,
+    payment,
     boundary,
     copyText,
   };
@@ -2676,6 +2730,32 @@ async function copyPaidDiagnosisReport() {
     alert("已复制付费诊断报告。");
   } catch {
     prompt("复制这份诊断报告：", text);
+  }
+}
+
+async function copyPurchaseGuide() {
+  const report = buildPaidDiagnosisReport();
+  const text = [
+    `${report.title}｜${report.priceLabel}`,
+    "",
+    report.valuePromise,
+    report.limitedOffer,
+    "",
+    "你会拿到：",
+    ...report.deliverables.map((item) => `- ${item}`),
+    "",
+    "购买流程：",
+    ...report.purchaseSteps.map((item) => `- ${item}`),
+    "",
+    report.payment.copy,
+    "",
+    report.boundary,
+  ].join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("已复制购买说明。");
+  } catch {
+    prompt("复制这段购买说明：", text);
   }
 }
 
