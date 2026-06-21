@@ -438,6 +438,7 @@ function renderTopbar(title, eyebrow = "亿个小目标") {
 function renderHomePage() {
   const stats = getStats();
   const monthNeed = getMonthlyNeed(stats.remaining);
+  const coachInsight = buildAICoachInsight();
   return `
     ${renderTopbar("今天继续盯住目标")}
 
@@ -461,7 +462,11 @@ function renderHomePage() {
       <span class="pill orange">今日行动</span>
       <div class="action-text">${state.dailyAction.text}</div>
       <div class="hero-sub">预计 ${state.dailyAction.estimatedMinutes} 分钟 · ${state.dailyAction.projectName || "未关联项目"}</div>
-      <div class="notice">建议来源：${state.dailyAction.source || "目标进度与近期记录"}</div>
+      <div class="ai-reason-box">
+        <strong>AI 今日判断</strong>
+        <p>${coachInsight.todayJudgment}</p>
+        <span>${coachInsight.reason}</span>
+      </div>
       <div class="button-row">
         <button class="primary-btn" data-action="complete-action">${state.dailyAction.status === "completed" ? "已完成" : "完成"}</button>
         <button class="secondary-btn" data-action="refresh-action">换一个</button>
@@ -813,6 +818,7 @@ function renderMePage() {
   const profileDisplay = buildProfileDisplay(profile, state.projects);
   const firstDaySummary = buildFirstDaySummary(profile, state.projects, state.dailyAction);
   const contentPack = buildContentStarterPack(profile, state.projects);
+  const coachInsight = buildAICoachInsight();
   return `
     ${renderTopbar("我的", "设置与内测")}
     <section class="card">
@@ -842,6 +848,20 @@ function renderMePage() {
               <button class="primary-btn" data-action="copy-profile-share">复制画像文案</button>
               <button class="secondary-btn" data-tab="record">记录第一笔</button>
             </div>
+          </section>
+          <section class="section card ai-diagnosis-card">
+            <span class="pill blue">AI 诊断报告</span>
+            <div class="action-text">${coachInsight.diagnosis.summary}</div>
+            <div class="profile-summary-grid">
+              <div><span>最强资产</span><strong>${coachInsight.diagnosis.strongestAsset}</strong></div>
+              <div><span>最优路径</span><strong>${coachInsight.diagnosis.bestPath}</strong></div>
+              <div><span>最大风险</span><strong>${coachInsight.diagnosis.risk}</strong></div>
+              <div><span>7天重点</span><strong>${coachInsight.diagnosis.next7Days}</strong></div>
+            </div>
+            <div class="ai-question-list">
+              ${coachInsight.followUpQuestions.map((item) => `<button class="ai-question" data-tab="record">${item}</button>`).join("")}
+            </div>
+            <div class="notice">${coachInsight.boundary}</div>
           </section>
           <section class="section card content-starter-card">
             <span class="pill blue">可直接发布</span>
@@ -1841,6 +1861,52 @@ function buildFirstDaySummary(profile = {}, projects = [], dailyAction = {}) {
     firstCustomer: display.firstCustomers[0] || firstProject.targetCustomer || "已有资源中的潜在付费客户",
     quickWins: ["复制画像文案发给朋友或社群", "记录今天第一笔收入/支出/行动", "按第一步行动推进25分钟"],
   };
+}
+
+function buildAICoachInsight() {
+  const profile = state.personalProfile || {};
+  const projects = state.projects || [];
+  const records = state.records || [];
+  const display = buildProfileDisplay(profile, projects);
+  const action = state.dailyAction || generateAction();
+  const project = projects.find((item) => item.name === action.projectName) || projects[0] || {};
+  const hasCustomerSignal = records.some((item) => /客户|成交|咨询|付款|反馈|沟通/.test(item.note || item.sourceText || ""));
+  const strongestAsset = display.assetTags.slice(0, 3).join("、") || profile.skills || "你的经验资产";
+  const bestPath = project.name || display.monetizationTags[0] || "先验证一个可收费的小服务";
+  const actionText = action.text || shortActionText(project.nextAction || "记录今天的一笔进展");
+  const reason = hasCustomerSignal
+    ? `你已经有客户反馈或交易记录，AI 建议继续围绕「${bestPath}」放大真实需求。`
+    : `你现在最缺的是客户反馈和真实需求样本，所以先做「${actionText}」，比继续空想方案更重要。`;
+  const risk =
+    records.length === 0
+      ? "记录样本还太少，容易凭感觉判断项目好坏。"
+      : getStats().weekNet < 0
+        ? "本周净收益为负，新增投入前要先复盘成本来源。"
+        : "不要过早承诺完整交付或保证收益，先验证小额付款。";
+  return {
+    todayJudgment: `AI 建议你今天只做一件事：${actionText}。`,
+    reason,
+    diagnosis: {
+      summary: `AI 判断你更适合先做「${bestPath}」，用小服务验证需求。`,
+      strongestAsset,
+      bestPath,
+      risk,
+      next7Days: `围绕「${actionText}」连续记录反馈，至少拿到1个客户问题或1次真实沟通。`,
+    },
+    followUpQuestions: buildCoachQuestions(profile, project, records),
+    boundary: "AI 诊断仅供记录、复盘和行动参考，不承诺收益、不保证成交。",
+  };
+}
+
+function buildCoachQuestions(profile = {}, project = {}, records = []) {
+  const questions = [];
+  if (!project.targetCustomer) questions.push("你的第一批客户具体是谁？");
+  if (!project.monetization) questions.push("这件事准备用什么方式收费？");
+  if (!records.length) questions.push("今天有没有一次客户沟通、成交或反馈？");
+  if (!profile.salesComfort) questions.push("你能接受主动私聊客户吗？");
+  questions.push(`围绕「${project.name || "当前项目"}」最近一次真实客户反馈是什么？`);
+  questions.push("如果7天没收入，你准备暂停、调整还是继续验证？");
+  return uniqueList(questions).slice(0, 3);
 }
 
 function buildContentStarterPack(profile = {}, projects = []) {

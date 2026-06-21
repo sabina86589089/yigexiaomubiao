@@ -461,6 +461,57 @@ button {
   background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
 }
 
+.ai-reason-box,
+.ai-diagnosis-card {
+  border-color: #c7d2fe;
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
+}
+
+.ai-reason-box {
+  display: grid;
+  gap: 7px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.ai-reason-box strong {
+  color: #1d4ed8;
+  font-size: 13px;
+}
+
+.ai-reason-box p {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.ai-reason-box span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-question-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.ai-question {
+  min-height: 38px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 850;
+  padding: 9px 10px;
+  text-align: left;
+}
+
 .quick-win-list {
   display: grid;
   gap: 8px;
