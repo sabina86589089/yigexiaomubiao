@@ -802,6 +802,7 @@ function renderMePage() {
       <div class="hero-sub">${profile.skills || "填写职业、技能、资源、时间和赚钱偏好，后续行动建议会更贴合你。"}</div>
       <div class="button-row">
         <button class="primary-btn" data-open="profile">${profileReady ? "编辑个人画像" : "建立个人画像"}</button>
+        ${profileReady ? `<button class="secondary-btn" data-action="copy-profile-share">复制画像文案</button>` : ""}
       </div>
     </section>
     ${
@@ -1403,6 +1404,7 @@ function handleAction(action) {
     if (input) input.click();
   }
   if (action === "copy-share-link") copyShareLink();
+  if (action === "copy-profile-share") copyProfileShareText();
   if (action === "send-feedback") sendFeedback();
   if (action === "back-projects") {
     state.activeProjectId = null;
@@ -1749,6 +1751,30 @@ function buildProfileDisplay(profile = {}, projects = []) {
       "12-24个月：筛选利润更高的客户类型，扩大渠道和转介绍，谨慎考虑团队化或产品化。",
     ],
   };
+}
+
+function buildProfileShareText(profile = {}, projects = []) {
+  const display = buildProfileDisplay(profile, projects);
+  const firstAction = display.roadmap[0]?.replace(/^0-30天：/, "") || "整理1个可展示案例。";
+  return [
+    `我的AI赚钱画像：${display.positioning}`,
+    "",
+    `身份标签：${display.identityTags.slice(0, 4).join(" / ")}`,
+    `能力资产：${display.assetTags.slice(0, 5).join(" / ")}`,
+    "",
+    "推荐服务包：",
+    ...display.servicePackages.slice(0, 3).map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "内容选题：",
+    ...display.contentTopics.slice(0, 3).map((item, index) => `${index + 1}. ${item}`),
+    "",
+    `第一批客户：${display.firstCustomers.slice(0, 2).join("；")}`,
+    `第一步：${firstAction}`,
+    "",
+    "提醒：AI只做记录、复盘和行动参考，不承诺收益。",
+    "我用这个工具做自己的赚钱目标作战台：",
+    "https://sabina86589089.github.io/yigexiaomubiao/",
+  ].join("\n");
 }
 
 function buildProjectDrafts(profile) {
@@ -2284,6 +2310,16 @@ async function copyShareLink() {
     alert("已复制分享链接。");
   } catch {
     prompt("复制这个链接发给朋友：", url);
+  }
+}
+
+async function copyProfileShareText() {
+  const text = buildProfileShareText(state.personalProfile, state.projects);
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("已复制画像分享文案。");
+  } catch {
+    prompt("复制这段画像文案：", text);
   }
 }
 
