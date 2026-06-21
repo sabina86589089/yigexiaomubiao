@@ -859,7 +859,7 @@ function renderMePage() {
               <div><span>7天重点</span><strong>${coachInsight.diagnosis.next7Days}</strong></div>
             </div>
             <div class="ai-question-list">
-              ${coachInsight.followUpQuestions.map((item) => `<button class="ai-question" data-tab="record">${item}</button>`).join("")}
+              ${coachInsight.followUpQuestions.map((item) => `<button class="ai-question" data-coach-question="${item}">${item}</button>`).join("")}
             </div>
             <div class="notice">${coachInsight.boundary}</div>
           </section>
@@ -1390,6 +1390,10 @@ function bindEvents() {
 
   document.querySelectorAll("[data-add-profile-project]").forEach((button) => {
     button.addEventListener("click", () => addProfileProjectDraft(Number(button.dataset.addProfileProject)));
+  });
+
+  document.querySelectorAll("[data-coach-question]").forEach((button) => {
+    button.addEventListener("click", () => startCoachQuestion(button.dataset.coachQuestion));
   });
 
   document.querySelectorAll("[data-example]").forEach((button) => {
@@ -2229,6 +2233,17 @@ function startVoiceInput() {
   document.querySelector("#recordText")?.focus();
 }
 
+function startCoachQuestion(question) {
+  const project = getActionProject() || state.projects[0];
+  state.activeTab = "record";
+  state.activeProjectId = null;
+  state.recordProjectId = project?.id || "";
+  state.recordInputText = `AI追问：${question}\n我的回答：`;
+  state.recordNotice = "回答这个问题后点 AI 识别，系统会把它保存成客户反馈/行动信号。";
+  saveState();
+  render();
+}
+
 function parseTextToDrafts(text, preferredProjectId = "") {
   const project = guessProject(text) || getProject(preferredProjectId);
   const clauses = text
@@ -2240,7 +2255,7 @@ function parseTextToDrafts(text, preferredProjectId = "") {
 
   for (const part of parts) {
     const hasMoneyIntent = /(收入|进账|赚|收款|到账|接广|成交|尾款|分成|工资|提成|回款|销售|卖|花|花费|支出|费用|付|付款|支付|投流|成本|买|购买|发了|用了|扣|扣款|亏|充值|订阅|会员|房贷|房租|水电|物业|美金|美元|usd|\$|¥|￥)/i.test(part);
-    const hasActionIntent = /(联系|发布|整理|复盘|跟进|拜访|沟通|面试|投递|客户)/.test(part);
+    const hasActionIntent = /(联系|发布|整理|复盘|跟进|拜访|沟通|面试|投递|客户|反馈|需求|报价|案例|回答)/.test(part);
     if (!hasMoneyIntent && hasActionIntent) continue;
     const amountMatches = [...part.matchAll(/([$￥¥])?\s*(\d+(?:\.\d{1,2})?)\s*(美金|美元|刀|usd|USD|元|块|圆)?/g)].filter((match) => {
       const unit = match[3] || match[1] || "";
@@ -2275,14 +2290,14 @@ function parseTextToDrafts(text, preferredProjectId = "") {
 
   if (drafts.length) return drafts;
 
-  if (/(联系|发布|整理|复盘|跟进)/.test(text)) {
+  if (/(联系|发布|整理|复盘|跟进|沟通|客户|反馈|需求|报价|案例|AI追问|我的回答)/.test(text)) {
     return [
       {
         id: uid(),
         recordType: "action",
         amount: 0,
         actionCount: Number(text.match(/\d+/)?.[0] || 1),
-        actionUnit: text.includes("客户") ? "个客户" : "次",
+        actionUnit: /反馈|需求|报价|AI追问|我的回答/.test(text) ? "次反馈" : text.includes("客户") ? "个客户" : "次",
         projectId: project?.id || "",
         note: text,
         sourceText: text,
