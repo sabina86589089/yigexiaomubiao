@@ -85,6 +85,7 @@ const defaultState = {
   recordInputText: "",
   recordProjectId: "",
   recordNotice: "",
+  lastCoachResponse: null,
   desktopMode: false,
   isPro: false,
   personalProfile: {
@@ -472,6 +473,17 @@ function renderHomePage() {
         <button class="secondary-btn" data-action="refresh-action">换一个</button>
       </div>
     </section>
+
+    ${
+      state.lastCoachResponse
+        ? `<section class="section card ai-response-card">
+            <span class="pill blue">${state.lastCoachResponse.title}</span>
+            <div class="action-text">${state.lastCoachResponse.summary}</div>
+            <div class="hero-sub">${state.lastCoachResponse.nextAction}</div>
+            <div class="notice">关联项目：${state.lastCoachResponse.projectName || "未关联项目"}</div>
+          </section>`
+        : ""
+    }
 
     <section class="section card quick-card">
       <div>
@@ -2340,6 +2352,38 @@ function cleanNote(text) {
   return text.replace(/\s+/g, " ").slice(0, 40);
 }
 
+function buildRecordCoachResponse(drafts = []) {
+  const first = drafts[0] || {};
+  const project = getProject(first.projectId) || state.projects[0] || {};
+  const noteText = drafts.map((item) => item.note || item.sourceText || "").join(" ");
+  const hasFeedback = /客户|反馈|需求|报价|案例|沟通/.test(noteText) || drafts.some((item) => item.recordType === "action");
+  const hasIncome = drafts.some((item) => item.recordType === "income");
+  const hasExpense = drafts.some((item) => item.recordType === "expense");
+  const title = hasIncome ? "AI 读到一笔收入" : hasExpense ? "AI 读到一笔成本" : "AI 读到一条反馈";
+  const summary = hasIncome
+    ? `这说明「${project.name || "当前项目"}」已经出现真实付款信号，下一步要复盘来源并争取复购或转介绍。`
+    : hasExpense
+      ? `这是一笔成本信号。AI 建议你确认它是否服务于明确项目，避免继续投入没有反馈的成本。`
+      : hasFeedback
+        ? `这是一条客户反馈或真实需求信号，说明「${project.name || "当前项目"}」不只是想法，已经有可验证线索。`
+        : "这条记录会成为后续 AI 判断项目优先级的依据。";
+  const nextAction = hasIncome
+    ? "下一步：记录付款客户来源，并整理1个复购或转介绍动作。"
+    : hasExpense
+      ? "下一步：标记这笔成本对应的预期回报，7天内没有反馈就暂停新增投入。"
+      : /报价/.test(noteText)
+        ? "下一步：把报价和案例整理成一页说明，发给这个客户验证预算。"
+        : /案例/.test(noteText)
+          ? "下一步：补齐案例的前后对比、交付范围和可收费版本。"
+          : "下一步：把这条反馈转成一个可验证的小动作，并继续记录结果。";
+  return {
+    title,
+    summary,
+    nextAction,
+    projectName: project.name || "",
+  };
+}
+
 function saveDrafts() {
   const drafts = state.draftRecords.map((item) => ({
     ...item,
@@ -2349,6 +2393,7 @@ function saveDrafts() {
     includedInGoal: item.recordType === "income" ? item.includedInGoal !== false : false,
   }));
   state.records.push(...drafts);
+  state.lastCoachResponse = buildRecordCoachResponse(drafts);
   state.draftRecords = [];
   state.recordInputText = "";
   state.recordNotice = "";

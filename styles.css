@@ -462,7 +462,8 @@ button {
 }
 
 .ai-reason-box,
-.ai-diagnosis-card {
+.ai-diagnosis-card,
+.ai-response-card {
   border-color: #c7d2fe;
   background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%);
 }
