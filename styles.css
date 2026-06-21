@@ -477,6 +477,56 @@ button {
   padding: 9px 10px;
 }
 
+.content-starter-card {
+  background: #fff;
+}
+
+.content-topic-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.content-topic {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.content-topic strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.content-topic p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.content-topic ol {
+  margin-left: 18px;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.intro-box {
+  white-space: pre-line;
+  margin: 12px 0;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #102033;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.65;
+  padding: 12px;
+}
+
 .project-drafts {
   display: grid;
   gap: 10px;

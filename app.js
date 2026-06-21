@@ -812,6 +812,7 @@ function renderMePage() {
   const profileReady = Boolean(profile.role || profile.skills || profile.resources);
   const profileDisplay = buildProfileDisplay(profile, state.projects);
   const firstDaySummary = buildFirstDaySummary(profile, state.projects, state.dailyAction);
+  const contentPack = buildContentStarterPack(profile, state.projects);
   return `
     ${renderTopbar("我的", "设置与内测")}
     <section class="card">
@@ -840,6 +841,28 @@ function renderMePage() {
             <div class="button-row">
               <button class="primary-btn" data-action="copy-profile-share">复制画像文案</button>
               <button class="secondary-btn" data-tab="record">记录第一笔</button>
+            </div>
+          </section>
+          <section class="section card content-starter-card">
+            <span class="pill blue">可直接发布</span>
+            <div class="action-text">3 条内容选题 + 自我介绍</div>
+            <div class="content-topic-list">
+              ${contentPack.topics
+                .map(
+                  (item) => `
+                    <article class="content-topic">
+                      <strong>${item.title}</strong>
+                      <p>${item.hook}</p>
+                      <ol>${item.outline.map((step) => `<li>${step}</li>`).join("")}</ol>
+                    </article>
+                  `,
+                )
+                .join("")}
+            </div>
+            <div class="intro-box">${contentPack.intro}</div>
+            <div class="button-row">
+              <button class="primary-btn" data-action="copy-self-intro">复制自我介绍</button>
+              <button class="secondary-btn" data-action="copy-content-pack">复制选题</button>
             </div>
           </section>
           <section class="section card profile-display">
@@ -1456,6 +1479,8 @@ function handleAction(action) {
   }
   if (action === "copy-share-link") copyShareLink();
   if (action === "copy-profile-share") copyProfileShareText();
+  if (action === "copy-self-intro") copySelfIntroText();
+  if (action === "copy-content-pack") copyContentPackText();
   if (action === "send-feedback") sendFeedback();
   if (action === "back-projects") {
     state.activeProjectId = null;
@@ -1816,6 +1841,51 @@ function buildFirstDaySummary(profile = {}, projects = [], dailyAction = {}) {
     firstCustomer: display.firstCustomers[0] || firstProject.targetCustomer || "已有资源中的潜在付费客户",
     quickWins: ["复制画像文案发给朋友或社群", "记录今天第一笔收入/支出/行动", "按第一步行动推进25分钟"],
   };
+}
+
+function buildContentStarterPack(profile = {}, projects = []) {
+  const display = buildProfileDisplay(profile, projects);
+  const project = projects[0] || {};
+  const customer = display.firstCustomers[0] || project.targetCustomer || "潜在客户";
+  const service = display.servicePackages[0] || display.monetizationTags[0] || "小额咨询服务";
+  const firstAction = shortActionText(project.nextAction || "整理1个可展示案例");
+  const baseTopics = [
+    {
+      title: display.contentTopics[0] || `我为什么开始做${display.positioning}`,
+      hook: `适合发小红书/抖音：用自己的经历讲清楚你能帮${customer}解决什么问题。`,
+      outline: [`我过去积累了什么能力`, `现在准备用${service}解决什么问题`, `我正在找哪类真实需求`],
+    },
+    {
+      title: display.contentTopics[1] || `用AI把一个业务问题做成可演示方案`,
+      hook: "适合做案例帖：展示从问题、流程、原型到交付清单的过程。",
+      outline: ["先描述一个真实业务场景", "展示AI如何拆解流程和生成原型", "说明适合先买诊断/原型而不是直接开发"],
+    },
+    {
+      title: `${firstAction}：我今天推进赚钱目标的第一步`,
+      hook: "适合做成长记录：让别人看到你不是空谈，而是在连续行动。",
+      outline: ["今天做了哪一个动作", "遇到什么反馈或卡点", "明天准备验证什么"],
+    },
+  ];
+  return {
+    intro: buildSelfIntroText(profile, projects),
+    topics: baseTopics.slice(0, 3),
+  };
+}
+
+function buildSelfIntroText(profile = {}, projects = []) {
+  const display = buildProfileDisplay(profile, projects);
+  const project = projects[0] || {};
+  const firstCustomer = display.firstCustomers[0] || project.targetCustomer || "有真实需求的人";
+  const service = display.servicePackages[0] || "诊断、方案和小额服务";
+  const firstAction = shortActionText(project.nextAction || "整理1个可展示案例");
+  return [
+    `我是${display.positioning}。`,
+    `我擅长：${display.assetTags.slice(0, 4).join("、")}。`,
+    `现在我想先服务：${firstCustomer}。`,
+    `我能提供的第一类服务是：${service}。`,
+    `我目前的第一步是：${firstAction}。`,
+    "提醒：以上是个人行动记录和服务介绍，不承诺收益、不保证成交。",
+  ].join("\n");
 }
 
 function buildProfileShareText(profile = {}, projects = []) {
@@ -2385,6 +2455,38 @@ async function copyProfileShareText() {
     alert("已复制画像分享文案。");
   } catch {
     prompt("复制这段画像文案：", text);
+  }
+}
+
+async function copySelfIntroText() {
+  const text = buildSelfIntroText(state.personalProfile, state.projects);
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("已复制自我介绍。");
+  } catch {
+    prompt("复制这段自我介绍：", text);
+  }
+}
+
+async function copyContentPackText() {
+  const pack = buildContentStarterPack(state.personalProfile, state.projects);
+  const text = [
+    "我的首批内容选题：",
+    "",
+    ...pack.topics.flatMap((item, index) => [
+      `${index + 1}. ${item.title}`,
+      `开头：${item.hook}`,
+      `结构：${item.outline.join(" / ")}`,
+      "",
+    ]),
+    "自我介绍：",
+    pack.intro,
+  ].join("\n");
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("已复制内容选题。");
+  } catch {
+    prompt("复制这组选题：", text);
   }
 }
 
