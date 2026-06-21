@@ -456,6 +456,27 @@ button {
   line-height: 1.45;
 }
 
+.first-day-card {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+}
+
+.quick-win-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.quick-win-list span {
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 9px 10px;
+}
+
 .project-drafts {
   display: grid;
   gap: 10px;
@@ -577,6 +598,10 @@ button {
   border-radius: 999px;
   background: #eef2f7;
   color: var(--ink);
+}
+
+.onboard-examples {
+  margin-top: -4px;
 }
 
 .tabs {
@@ -758,6 +783,24 @@ button {
 
 .onboarding .card {
   width: 100%;
+}
+
+.onboard-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.onboard-steps span {
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 10px 8px;
+  text-align: center;
 }
 
 .brand {

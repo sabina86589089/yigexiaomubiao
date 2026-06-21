@@ -541,6 +541,23 @@ function getRecordExamples() {
   ];
 }
 
+function getOnboardingExamples() {
+  return [
+    {
+      label: "AI产品/售前",
+      text: "我有10多年B端产品经验，是产品经理，可以做业务系统、解决方案、售前和招投标。我现在学习AI，可以快速出图文、视频，也可以生成业务系统。每周能投入20小时，想在两年内做到百万目标。",
+    },
+    {
+      label: "副业接单",
+      text: "我现在做运营和内容，有小红书、抖音经验，会写文案、剪视频、做账号定位。每周能投入8小时，想先用AI帮小商家做内容获客和短视频，稳一点接单变现。",
+    },
+    {
+      label: "小生意经营",
+      text: "我有一些本地客户和老客户资源，熟悉销售、报价和客户沟通。每周能投入6小时，想低成本测试一个赚钱项目，不想先囤货，也不想承诺收益。",
+    },
+  ];
+}
+
 function renderRecordPage() {
   const records = [...state.records].sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
   const examples = getRecordExamples();
@@ -794,6 +811,7 @@ function renderMePage() {
   const profile = state.personalProfile || {};
   const profileReady = Boolean(profile.role || profile.skills || profile.resources);
   const profileDisplay = buildProfileDisplay(profile, state.projects);
+  const firstDaySummary = buildFirstDaySummary(profile, state.projects, state.dailyAction);
   return `
     ${renderTopbar("我的", "设置与内测")}
     <section class="card">
@@ -807,7 +825,24 @@ function renderMePage() {
     </section>
     ${
       profileReady
-        ? `<section class="section card profile-display">
+        ? `<section class="section card first-day-card">
+            <span class="pill green">首日结果</span>
+            <div class="action-text">${firstDaySummary.positioning}</div>
+            <div class="profile-summary-grid">
+              <div><span>优先项目</span><strong>${firstDaySummary.firstProject}</strong></div>
+              <div><span>今天行动</span><strong>${firstDaySummary.firstAction}</strong></div>
+              <div><span>服务包</span><strong>${firstDaySummary.servicePackage}</strong></div>
+              <div><span>第一批客户</span><strong>${firstDaySummary.firstCustomer}</strong></div>
+            </div>
+            <div class="quick-win-list">
+              ${firstDaySummary.quickWins.map((item) => `<span>${item}</span>`).join("")}
+            </div>
+            <div class="button-row">
+              <button class="primary-btn" data-action="copy-profile-share">复制画像文案</button>
+              <button class="secondary-btn" data-tab="record">记录第一笔</button>
+            </div>
+          </section>
+          <section class="section card profile-display">
             <span class="pill blue">AI 画像</span>
             <div class="action-text">${profileDisplay.positioning}</div>
             <div class="profile-block">
@@ -939,17 +974,26 @@ function renderDesktopMode() {
 }
 
 function renderOnboarding() {
+  const examples = getOnboardingExamples();
   return `
     <main class="onboarding">
       <section class="card">
         <div class="brand">亿</div>
         <div class="eyebrow">AI 赚钱目标作战台</div>
-        <h1 class="title">先说说你的情况</h1>
-        <p class="hero-sub">你做什么、会什么、有什么资源、每周能投入多久。AI 会先帮你生成画像、推荐项目和第一步行动。</p>
+        <h1 class="title">用一段话生成你的赚钱作战台</h1>
+        <p class="hero-sub">不用先建一堆表。说清楚你的经历、技能、资源和时间，系统会生成个人画像、推荐项目和今天第一步。</p>
+        <div class="onboard-steps">
+          <span>画像</span>
+          <span>项目</span>
+          <span>行动</span>
+        </div>
         <div class="form section">
           <div class="field">
             <label>你的真实情况</label>
-            <textarea id="onboardProfileText" placeholder="例如：我现在做设备销售，熟悉报价和客户沟通，有一些工厂老板资源。每周能投入6小时，想稳一点做副业，不太想强销售。"></textarea>
+            <textarea id="onboardProfileText" placeholder="例如：我有10多年B端产品经验，正在学习AI，能做图文、视频和业务系统，每周能投入20小时，想在两年内赚到100万。"></textarea>
+          </div>
+          <div class="chips onboard-examples">
+            ${examples.map((item) => `<button class="chip" data-onboard-example="${item.text}">${item.label}</button>`).join("")}
           </div>
           <details class="advanced-settings">
             <summary>调整目标金额</summary>
@@ -1316,6 +1360,13 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-onboard-example]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = document.querySelector("#onboardProfileText");
+      if (input) input.value = button.dataset.onboardExample;
+    });
+  });
+
   const recordText = document.querySelector("#recordText");
   if (recordText) {
     recordText.addEventListener("input", () => {
@@ -1431,6 +1482,7 @@ function finishOnboarding() {
   state.projects = plan.projects;
   state.records = [];
   state.dailyAction = plan.dailyAction;
+  state.activeTab = "me";
   saveState();
   render();
 }
@@ -1750,6 +1802,19 @@ function buildProfileDisplay(profile = {}, projects = []) {
       "3-12个月：把高频需求做成标准化服务包，形成可复用报价、交付清单和案例库。",
       "12-24个月：筛选利润更高的客户类型，扩大渠道和转介绍，谨慎考虑团队化或产品化。",
     ],
+  };
+}
+
+function buildFirstDaySummary(profile = {}, projects = [], dailyAction = {}) {
+  const display = buildProfileDisplay(profile, projects);
+  const firstProject = projects[0] || {};
+  return {
+    positioning: display.positioning,
+    firstProject: firstProject.name || display.monetizationTags[0] || "个人能力变现项目",
+    firstAction: dailyAction.text || shortActionText(firstProject.nextAction || "整理1个可展示案例"),
+    servicePackage: display.servicePackages[0] || "先卖诊断、方案或小额服务，不先重投入",
+    firstCustomer: display.firstCustomers[0] || firstProject.targetCustomer || "已有资源中的潜在付费客户",
+    quickWins: ["复制画像文案发给朋友或社群", "记录今天第一笔收入/支出/行动", "按第一步行动推进25分钟"],
   };
 }
 
