@@ -872,14 +872,9 @@ function renderMePage() {
           <section class="section card paid-report-card">
             <div class="card-headline">
               <span class="pill orange">${paidReport.priceLabel}</span>
-              <span>${paidReport.limitedOffer}</span>
+              <span>只要按步骤操作</span>
             </div>
             <div class="action-text">${paidReport.title}</div>
-            <div class="hero-sub">${paidReport.valuePromise}</div>
-            <div class="offer-strip">
-              <strong>${paidReport.summary}</strong>
-              <span>付款后交付，不承诺收益，只交付诊断、计划和复核。</span>
-            </div>
             <div class="diagnosis-flow">
               <div class="flow-head">
                 <span>${purchaseFlow.title}</span>
@@ -892,7 +887,7 @@ function renderMePage() {
                       <button class="flow-step ${purchaseFlow.activeStepId === step.id ? "active" : ""}" data-diagnosis-step="${step.id}">
                         <span>${index + 1}</span>
                         <strong>${step.title}</strong>
-                        <em>${step.cta}</em>
+                        <em>${step.shortHint}</em>
                       </button>
                     `,
                   )
@@ -904,7 +899,11 @@ function renderMePage() {
               </div>
             </div>
             <details class="purchase-detail">
-              <summary>我想先看清楚：什么时候触发、什么时候购买、买后有什么</summary>
+              <summary>详细说明</summary>
+              <div class="offer-strip">
+                <strong>${paidReport.summary}</strong>
+                <span>付款后交付，不承诺收益，只交付诊断、计划和复核。</span>
+              </div>
               <div class="purchase-explainers">
                 ${paidReport.purchaseExplainers
                 .map(
@@ -918,9 +917,12 @@ function renderMePage() {
                 .join("")}
               </div>
             </details>
-            <div class="paid-deliverables">
-              ${paidReport.deliverables.map((item) => `<div>${item}</div>`).join("")}
-            </div>
+            <details class="purchase-detail">
+              <summary>交付内容</summary>
+              <div class="paid-deliverables">
+                ${paidReport.deliverables.map((item) => `<div>${item}</div>`).join("")}
+              </div>
+            </details>
             <div class="purchase-box ${purchaseFlow.activeStepId === "pay" ? "active" : ""}">
               <strong>${paidReport.payment.title}</strong>
               <div class="payment-qr-box">
@@ -930,8 +932,11 @@ function renderMePage() {
                   <p>扫码付款 ¥9.9，付款后截图，连同下单资料一起发送。</p>
                 </div>
               </div>
-              <ol>${paidReport.purchaseSteps.map((item) => `<li>${item}</li>`).join("")}</ol>
-              <div class="notice">${paidReport.payment.copy}</div>
+              <details class="purchase-detail">
+                <summary>付款说明</summary>
+                <ol>${paidReport.purchaseSteps.map((item) => `<li>${item}</li>`).join("")}</ol>
+                <div class="notice">${paidReport.payment.copy}</div>
+              </details>
             </div>
             <div class="purchase-box ${purchaseFlow.activeStepId === "submit" ? "active" : ""}">
               <strong>提交资料</strong>
@@ -2262,31 +2267,36 @@ function buildDiagnosisPurchaseFlow(report = buildPaidDiagnosisReport(), activeS
       id: "free",
       title: "免费初诊已完成",
       cta: "查看免费结果",
-      feedback: "你已经拿到基础画像、优先项目和今天行动。先不用付费，也可以直接继续记录。",
+      shortHint: "先看结果",
+      feedback: "已完成，可继续记录。",
     },
     {
       id: "decide",
       title: "决定是否升级",
       cta: "我想要更具体",
-      feedback: "如果你想知道第一批客户是谁、7天怎么推进、内容怎么发，再进入 9.9 元诊断。",
+      shortHint: "想细化再买",
+      feedback: "想要细化，就继续。",
     },
     {
       id: "pay",
       title: "扫码付款 9.9",
       cta: "下一步：扫码付款",
-      feedback: "使用支付宝扫码付款 9.9 元，付款完成后保留截图。",
+      shortHint: "付完截图",
+      feedback: "扫码付款，保留截图。",
     },
     {
       id: "submit",
       title: "提交资料和截图",
       cta: "复制下单资料",
-      feedback: "复制下单资料，补充你的微信、目标、当前问题和付款截图，发给运营确认。",
+      shortHint: "复制后发送",
+      feedback: "复制资料，补截图发送。",
     },
     {
       id: "deliver",
       title: "等待复核交付",
       cta: "我已提交，等交付",
-      feedback: "收到资料后，AI 先生成初诊，我再人工复核，交付报告和 7 天行动计划。",
+      shortHint: "等待结果",
+      feedback: "等待复核和交付。",
     },
   ];
   const activeIndex = Math.max(0, steps.findIndex((step) => step.id === activeStepId));
