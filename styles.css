@@ -503,6 +503,34 @@ button {
   font-weight: 800;
 }
 
+.purchase-explainers {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.purchase-explainers div {
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.purchase-explainers strong {
+  display: block;
+  color: #9a3412;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.purchase-explainers p {
+  margin: 0;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .paid-deliverables {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

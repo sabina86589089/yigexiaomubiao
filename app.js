@@ -878,6 +878,18 @@ function renderMePage() {
               <strong>${paidReport.summary}</strong>
               <span>付款后交付，不承诺收益，只交付诊断、计划和复核。</span>
             </div>
+            <div class="purchase-explainers">
+              ${paidReport.purchaseExplainers
+                .map(
+                  (item) => `
+                    <div>
+                      <strong>${item.label}</strong>
+                      <p>${item.text}</p>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
             <div class="paid-deliverables">
               ${paidReport.deliverables.map((item) => `<div>${item}</div>`).join("")}
             </div>
@@ -887,7 +899,7 @@ function renderMePage() {
                 <img src="${paidReport.payment.qrSrc}" alt="支付宝收款码" />
                 <div>
                   <span>${paidReport.payment.method}</span>
-                  <p>扫码付款 ¥99，付款后截图，连同下单资料一起发送。</p>
+                  <p>扫码付款 ¥9.9，付款后截图，连同下单资料一起发送。</p>
                 </div>
               </div>
               <ol>${paidReport.purchaseSteps.map((item) => `<li>${item}</li>`).join("")}</ol>
@@ -2070,10 +2082,13 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
   const coach = buildAICoachInsight();
   const contentPack = buildContentStarterPack(profile, projects);
   const title = "AI个人赚钱画像诊断";
-  const priceLabel = "内测交付价 ¥99";
-  const summary = `基于你的${display.positioning}画像，AI 会先整理方向，我再做一次人工复核，避免只给你几条泛泛建议。`;
-  const valuePromise = `付款后交付「AI初诊 + 人工复核 + 7天行动计划」：帮你看清先做什么、找谁验证、今天怎么开始。`;
-  const limitedOffer = "内测限 10 人，适合想用 AI 做副业/接单/转型但方向不清的人。";
+  const priceLabel = "AI初诊体验价 ¥9.9";
+  const triggerScene = "填写个人画像后，系统会先免费生成基础建议；付费诊断只在你想进一步明确方向时触发。";
+  const purchaseMoment = "当你想要更具体的项目判断、第一批客户、7天行动计划和人工复核时，再购买这份诊断。";
+  const afterPurchase = "购买后获得：AI画像初诊报告、优先项目建议、7天行动计划、3条内容获客选题，以及一次人工复核优化。";
+  const summary = `基于你的${display.positioning}画像，AI 会先整理方向，再用 9.9 元体验价帮你把建议变成一份可执行的初诊报告。`;
+  const valuePromise = `适合在免费基础建议之后使用：AI 先生成初诊，我再做一次人工复核，帮你看清先做什么、找谁验证、今天怎么开始。`;
+  const limitedOffer = "内测体验价，适合想先低成本试一次 AI 赚钱画像诊断的人。";
   const deliverables = [
     "1份个人商业化诊断报告",
     "1个优先项目建议",
@@ -2081,6 +2096,11 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     "1份7天行动计划",
     "3条内容获客选题",
     "1次人工复核优化",
+  ];
+  const purchaseExplainers = [
+    { label: "什么时候触发", text: triggerScene },
+    { label: "什么时候购买", text: purchaseMoment },
+    { label: "购买后获得", text: afterPurchase },
   ];
   const sections = [
     {
@@ -2118,7 +2138,7 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
   const purchaseSteps = [
     `添加运营微信：${salesContact.wechat}`,
     "发送你的背景、技能、资源、目标金额和每周可投入时间。",
-    "确认内测名额后付款 99 元。",
+    "确认体验名额后付款 9.9 元。",
     "付款后发送截图，系统生成初稿，我再做一次人工复核。",
     "交付诊断报告，并邀请你连续记录 7 天行动结果。",
   ];
@@ -2129,7 +2149,7 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     copy: `${salesContact.paymentHint} 当前版本先走人工确认，暂不做自动扣款；这样更适合内测阶段收集真实反馈。`,
   };
   const orderTemplate = [
-    "我要购买：AI个人赚钱画像诊断 ¥99",
+    "我要购买：AI个人赚钱画像诊断 ¥9.9",
     "我的称呼：",
     "我的微信：",
     "当前背景：",
@@ -2147,6 +2167,15 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     summary,
     valuePromise,
     limitedOffer,
+    "",
+    "## 什么时候触发",
+    triggerScene,
+    "",
+    "## 什么时候购买",
+    purchaseMoment,
+    "",
+    "## 购买后获得",
+    afterPurchase,
     "",
     "## 你会拿到",
     ...deliverables.map((item) => `- ${item}`),
@@ -2166,6 +2195,10 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
   return {
     title,
     priceLabel,
+    triggerScene,
+    purchaseMoment,
+    afterPurchase,
+    purchaseExplainers,
     summary,
     valuePromise,
     limitedOffer,
