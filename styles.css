@@ -629,33 +629,70 @@ button {
   font-size: 17px;
 }
 
+.secondary-menu summary,
 .profile-display summary {
   cursor: pointer;
   list-style: none;
 }
 
+.secondary-menu summary::-webkit-details-marker,
 .profile-display summary::-webkit-details-marker {
   display: none;
 }
 
+.secondary-menu summary span,
 .profile-display summary span {
   display: grid;
   gap: 4px;
 }
 
+.secondary-menu summary strong,
 .profile-display summary strong {
   font-size: 16px;
 }
 
+.secondary-menu summary em,
 .profile-display summary em {
   color: var(--muted);
   font-size: 13px;
   font-style: normal;
 }
 
+.secondary-menu summary::after,
+.profile-display summary::after {
+  content: "展开";
+  float: right;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 900;
+  margin-top: -28px;
+}
+
+.secondary-menu[open] summary::after,
+.profile-display[open] summary::after {
+  content: "收起";
+}
+
+.secondary-menu[open],
 .profile-display[open] {
   display: grid;
   gap: 14px;
+}
+
+.menu-panel {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.menu-panel.ai-diagnosis-card,
+.menu-panel.content-starter-card {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  padding: 14px 0 0;
 }
 
 .ai-reason-box,

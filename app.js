@@ -900,8 +900,15 @@ function renderMePage() {
             </div>
             <div class="notice">${paidReport.boundary}</div>
           </section>
-          <section class="section card ai-diagnosis-card compact-section">
-            <span class="pill blue">AI 诊断报告</span>
+          <details class="section card secondary-menu">
+            <summary>
+              <span>
+                <strong>AI诊断与追问</strong>
+                <em>最优路径、风险、7天重点和追问</em>
+              </span>
+            </summary>
+            <div class="menu-panel ai-diagnosis-card compact-section">
+              <span class="pill blue">AI 诊断报告</span>
             <div class="action-text">${coachInsight.diagnosis.summary}</div>
             <div class="profile-summary-grid">
               <div><span>最强资产</span><strong>${coachInsight.diagnosis.strongestAsset}</strong></div>
@@ -913,9 +920,17 @@ function renderMePage() {
               ${coachInsight.followUpQuestions.map((item) => `<button class="ai-question" data-coach-question="${item}">${item}</button>`).join("")}
             </div>
             <div class="notice">${coachInsight.boundary}</div>
-          </section>
-          <section class="section card content-starter-card compact-section">
-            <span class="pill blue">可直接发布</span>
+            </div>
+          </details>
+          <details class="section card secondary-menu">
+            <summary>
+              <span>
+                <strong>内容工具</strong>
+                <em>选题、自我介绍和发布文案</em>
+              </span>
+            </summary>
+            <div class="menu-panel content-starter-card compact-section">
+              <span class="pill blue">可直接发布</span>
             <div class="action-text">3 条内容选题 + 自我介绍</div>
             <div class="content-topic-list">
               ${contentPack.topics
@@ -935,7 +950,8 @@ function renderMePage() {
               <button class="primary-btn" data-action="copy-self-intro">复制自我介绍</button>
               <button class="secondary-btn" data-action="copy-content-pack">复制选题</button>
             </div>
-          </section>
+            </div>
+          </details>
           <details class="section card profile-display">
             <summary>
               <span>
@@ -988,61 +1004,69 @@ function renderMePage() {
           </details>`
         : ""
     }
-    <section class="section card">
-      <span class="pill blue">AI 判断依据</span>
-      <div class="profile-grid">
-        <div class="metric"><span>可投入时间</span><strong>${profile.weeklyHours || state.goal.weeklyHours || 0} 小时/周</strong></div>
-        <div class="metric"><span>赚钱偏好</span><strong>${profile.earningPreference || "未填写"}</strong></div>
-        <div class="metric"><span>风险偏好</span><strong>${profile.riskPreference || state.goal.riskPreference || "未填写"}</strong></div>
+    <details class="section card secondary-menu">
+      <summary>
+        <span>
+          <strong>设置与数据</strong>
+          <em>目标、模板、备份、同步和风险提示</em>
+        </span>
+      </summary>
+      <div class="menu-panel">
+        <span class="pill blue">AI 判断依据</span>
+        <div class="profile-grid">
+          <div class="metric"><span>可投入时间</span><strong>${profile.weeklyHours || state.goal.weeklyHours || 0} 小时/周</strong></div>
+          <div class="metric"><span>赚钱偏好</span><strong>${profile.earningPreference || "未填写"}</strong></div>
+          <div class="metric"><span>风险偏好</span><strong>${profile.riskPreference || state.goal.riskPreference || "未填写"}</strong></div>
+        </div>
       </div>
-    </section>
-    <section class="card">
-      <span class="pill ${state.isPro ? "green" : "blue"}">${state.isPro ? "Pro 内测" : "免费内测"}</span>
-      <div class="action-text">${state.isPro ? "完整 AI 周复盘已开启" : "解锁完整 AI 周复盘"}</div>
-      <div class="hero-sub">当前版本用于 30 天真实用户测试，重点验证记录、复盘和付费意愿。</div>
-      <div class="button-row">
-        <button class="primary-btn" data-open="goal">调整目标</button>
-        <button class="secondary-btn" data-action="export-csv">导出数据</button>
+      <div class="menu-panel">
+        <span class="pill ${state.isPro ? "green" : "blue"}">${state.isPro ? "Pro 内测" : "免费内测"}</span>
+        <div class="action-text">${state.isPro ? "完整 AI 周复盘已开启" : "解锁完整 AI 周复盘"}</div>
+        <div class="hero-sub">当前版本用于 30 天真实用户测试，重点验证记录、复盘和付费意愿。</div>
+        <div class="button-row">
+          <button class="primary-btn" data-open="goal">调整目标</button>
+          <button class="secondary-btn" data-action="export-csv">导出数据</button>
+        </div>
+        <div class="field section">
+          <label>补充项目模板</label>
+          <select id="appendTemplate">
+            ${Object.entries(startTemplates).map(([key, item]) => `<option value="${key}">${item.label}</option>`).join("")}
+          </select>
+        </div>
+        <button class="secondary-btn" data-action="append-template">添加模板项目</button>
+        <div class="button-row">
+          <button class="secondary-btn" data-action="export-backup">完整备份</button>
+          <button class="secondary-btn" data-action="import-backup">导入备份</button>
+        </div>
+        <div class="button-row">
+          <button class="secondary-btn" data-action="copy-share-link">复制分享链接</button>
+          <button class="secondary-btn" data-action="send-feedback">反馈建议</button>
+        </div>
+        <input id="backupFile" type="file" accept="application/json,.json" hidden />
+        <div class="button-row">
+          <button class="secondary-btn" data-action="desktop-mode">桌面屏模式</button>
+          <button class="danger-btn" data-action="reset-demo">重新开始</button>
+        </div>
+        ${
+          getResetBackup()
+            ? `<div class="button-row"><button class="secondary-btn" data-action="restore-reset-backup">恢复上次重新开始前的数据</button></div>`
+            : ""
+        }
       </div>
-      <div class="field section">
-        <label>补充项目模板</label>
-        <select id="appendTemplate">
-          ${Object.entries(startTemplates).map(([key, item]) => `<option value="${key}">${item.label}</option>`).join("")}
-        </select>
+      <div class="menu-panel">
+        <span class="pill ${cloud.configured && cloud.session ? "green" : "orange"}">${cloud.configured ? "云端数据" : "本地数据"}</span>
+        <div class="action-text">${cloud.configured && cloud.session ? "已登录云端账号" : "当前为本地模式"}</div>
+        <div class="hero-sub">${cloud.session?.user?.email || "配置 Supabase 后可开启多人云端数据。"}</div>
+        ${
+          cloud.configured && cloud.session
+            ? `<div class="button-row"><button class="secondary-btn" data-action="sync-now">立即同步</button><button class="danger-btn" data-action="auth-logout">退出登录</button></div>`
+            : ""
+        }
       </div>
-      <button class="secondary-btn" data-action="append-template">添加模板项目</button>
-      <div class="button-row">
-        <button class="secondary-btn" data-action="export-backup">完整备份</button>
-        <button class="secondary-btn" data-action="import-backup">导入备份</button>
+      <div class="notice">
+        AI 生成内容仅供记录和复盘参考，不构成投资、理财、法律、税务、职业或创业成功建议。请结合自身情况独立判断。
       </div>
-      <div class="button-row">
-        <button class="secondary-btn" data-action="copy-share-link">复制分享链接</button>
-        <button class="secondary-btn" data-action="send-feedback">反馈建议</button>
-      </div>
-      <input id="backupFile" type="file" accept="application/json,.json" hidden />
-      <div class="button-row">
-        <button class="secondary-btn" data-action="desktop-mode">桌面屏模式</button>
-        <button class="danger-btn" data-action="reset-demo">重新开始</button>
-      </div>
-      ${
-        getResetBackup()
-          ? `<div class="button-row"><button class="secondary-btn" data-action="restore-reset-backup">恢复上次重新开始前的数据</button></div>`
-          : ""
-      }
-    </section>
-    <section class="section card">
-      <span class="pill ${cloud.configured && cloud.session ? "green" : "orange"}">${cloud.configured ? "云端数据" : "本地数据"}</span>
-      <div class="action-text">${cloud.configured && cloud.session ? "已登录云端账号" : "当前为本地模式"}</div>
-      <div class="hero-sub">${cloud.session?.user?.email || "配置 Supabase 后可开启多人云端数据。"}</div>
-      ${
-        cloud.configured && cloud.session
-          ? `<div class="button-row"><button class="secondary-btn" data-action="sync-now">立即同步</button><button class="danger-btn" data-action="auth-logout">退出登录</button></div>`
-          : ""
-      }
-    </section>
-    <section class="section notice">
-      AI 生成内容仅供记录和复盘参考，不构成投资、理财、法律、税务、职业或创业成功建议。请结合自身情况独立判断。
-    </section>
+    </details>
   `;
 }
 
