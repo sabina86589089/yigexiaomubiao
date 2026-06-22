@@ -893,10 +893,11 @@ function renderMePage() {
               <strong>${paidReport.payment.title}</strong>
               <ol>${paidReport.purchaseSteps.map((item) => `<li>${item}</li>`).join("")}</ol>
               <div class="notice">${paidReport.payment.copy}</div>
+              <pre class="order-template">${paidReport.orderTemplate}</pre>
             </div>
             <div class="button-row">
               <button class="primary-btn" data-action="copy-purchase-guide">复制购买说明</button>
-              <button class="secondary-btn" data-action="copy-paid-report">复制报告</button>
+              <button class="secondary-btn" data-action="copy-order-template">复制下单资料</button>
             </div>
             <div class="notice">${paidReport.boundary}</div>
           </section>
@@ -1555,6 +1556,7 @@ function handleAction(action) {
   if (action === "copy-share-link") copyShareLink();
   if (action === "copy-profile-share") copyProfileShareText();
   if (action === "copy-purchase-guide") copyPurchaseGuide();
+  if (action === "copy-order-template") copyOrderTemplate();
   if (action === "copy-paid-report") copyPaidDiagnosisReport();
   if (action === "copy-self-intro") copySelfIntroText();
   if (action === "copy-content-pack") copyContentPackText();
@@ -2097,6 +2099,17 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     title: "购买与付款方式",
     copy: `${salesContact.paymentHint} 当前版本先走人工确认，暂不做自动扣款；这样更适合内测阶段收集真实反馈。`,
   };
+  const orderTemplate = [
+    "我要购买：AI个人赚钱画像诊断 ¥99",
+    "我的称呼：",
+    "我的微信：",
+    "当前背景：",
+    "技能/资源：",
+    "目标金额/期限：",
+    "每周可投入时间：",
+    "现在最想解决的问题：",
+    "付款截图：已付款后补充",
+  ].join("\n");
   const boundary = "本报告用于记录、复盘和行动参考，不承诺收益、不保证成交，不构成投资、职业或创业成功建议。";
   const copyText = [
     `# ${title}`,
@@ -2111,6 +2124,9 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     "",
     "## 购买流程",
     ...purchaseSteps.map((item) => `- ${item}`),
+    "",
+    "## 下单资料模板",
+    orderTemplate,
     "",
     ...sections.flatMap((section) => [`## ${section.title}`, ...section.items.map((item) => `- ${item}`), ""]),
     `## ${payment.title}`,
@@ -2128,6 +2144,7 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     sections,
     purchaseSteps,
     payment,
+    orderTemplate,
     boundary,
     copyText,
   };
@@ -2747,6 +2764,9 @@ async function copyPurchaseGuide() {
     "购买流程：",
     ...report.purchaseSteps.map((item) => `- ${item}`),
     "",
+    "下单资料模板：",
+    report.orderTemplate,
+    "",
     report.payment.copy,
     "",
     report.boundary,
@@ -2756,6 +2776,16 @@ async function copyPurchaseGuide() {
     alert("已复制购买说明。");
   } catch {
     prompt("复制这段购买说明：", text);
+  }
+}
+
+async function copyOrderTemplate() {
+  const text = buildPaidDiagnosisReport().orderTemplate;
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("已复制下单资料模板。");
+  } catch {
+    prompt("复制这段下单资料：", text);
   }
 }
 

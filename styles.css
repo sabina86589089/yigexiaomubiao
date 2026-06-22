@@ -561,6 +561,20 @@ button {
   line-height: 1.55;
 }
 
+.order-template {
+  white-space: pre-wrap;
+  margin: 0;
+  border: 1px dashed #fdba74;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.6;
+  padding: 10px;
+}
+
 .ai-reason-box,
 .ai-diagnosis-card,
 .ai-response-card {
