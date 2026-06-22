@@ -67,6 +67,7 @@ const config = window.YGXMB_CONFIG || {};
 const salesContact = {
   wechat: config.SALES_WECHAT || "请配置运营微信号",
   paymentHint: config.PAYMENT_HINT || "微信/支付宝转账均可，付款后发送截图和个人资料。",
+  paymentQrSrc: config.PAYMENT_QR_SRC || "./assets/alipay-qr.jpg",
 };
 const cloud = {
   configured: Boolean(config.SUPABASE_URL && config.SUPABASE_ANON_KEY && window.supabase),
@@ -867,30 +868,28 @@ function renderMePage() {
             </div>
           </section>
           <section class="section card paid-report-card">
-            <span class="pill orange">${paidReport.priceLabel}</span>
+            <div class="card-headline">
+              <span class="pill orange">${paidReport.priceLabel}</span>
+              <span>${paidReport.limitedOffer}</span>
+            </div>
             <div class="action-text">${paidReport.title}</div>
             <div class="hero-sub">${paidReport.valuePromise}</div>
             <div class="offer-strip">
               <strong>${paidReport.summary}</strong>
-              <span>${paidReport.limitedOffer}</span>
+              <span>付款后交付，不承诺收益，只交付诊断、计划和复核。</span>
             </div>
             <div class="paid-deliverables">
               ${paidReport.deliverables.map((item) => `<div>${item}</div>`).join("")}
             </div>
-            <div class="paid-report-list">
-              ${paidReport.sections
-                .map(
-                  (section) => `
-                    <article>
-                      <strong>${section.title}</strong>
-                      <ul>${section.items.map((item) => `<li>${item}</li>`).join("")}</ul>
-                    </article>
-                  `,
-                )
-                .join("")}
-            </div>
             <div class="purchase-box">
               <strong>${paidReport.payment.title}</strong>
+              <div class="payment-qr-box">
+                <img src="${paidReport.payment.qrSrc}" alt="支付宝收款码" />
+                <div>
+                  <span>${paidReport.payment.method}</span>
+                  <p>扫码付款 ¥99，付款后截图，连同下单资料一起发送。</p>
+                </div>
+              </div>
               <ol>${paidReport.purchaseSteps.map((item) => `<li>${item}</li>`).join("")}</ol>
               <div class="notice">${paidReport.payment.copy}</div>
               <pre class="order-template">${paidReport.orderTemplate}</pre>
@@ -901,7 +900,7 @@ function renderMePage() {
             </div>
             <div class="notice">${paidReport.boundary}</div>
           </section>
-          <section class="section card ai-diagnosis-card">
+          <section class="section card ai-diagnosis-card compact-section">
             <span class="pill blue">AI 诊断报告</span>
             <div class="action-text">${coachInsight.diagnosis.summary}</div>
             <div class="profile-summary-grid">
@@ -915,7 +914,7 @@ function renderMePage() {
             </div>
             <div class="notice">${coachInsight.boundary}</div>
           </section>
-          <section class="section card content-starter-card">
+          <section class="section card content-starter-card compact-section">
             <span class="pill blue">可直接发布</span>
             <div class="action-text">3 条内容选题 + 自我介绍</div>
             <div class="content-topic-list">
@@ -937,9 +936,13 @@ function renderMePage() {
               <button class="secondary-btn" data-action="copy-content-pack">复制选题</button>
             </div>
           </section>
-          <section class="section card profile-display">
-            <span class="pill blue">AI 画像</span>
-            <div class="action-text">${profileDisplay.positioning}</div>
+          <details class="section card profile-display">
+            <summary>
+              <span>
+                <strong>完整 AI 画像</strong>
+                <em>标签、服务包、客户和路线图</em>
+              </span>
+            </summary>
             <div class="profile-block">
               <strong>身份标签</strong>
               <div class="tag-cloud">${profileDisplay.identityTags.map((item) => `<span>${item}</span>`).join("")}</div>
@@ -982,7 +985,7 @@ function renderMePage() {
               <strong>两年百万路线图</strong>
               <ol class="roadmap-list">${profileDisplay.roadmap.map((item) => `<li>${item}</li>`).join("")}</ol>
             </div>
-          </section>`
+          </details>`
         : ""
     }
     <section class="section card">
@@ -2097,6 +2100,8 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
   ];
   const payment = {
     title: "购买与付款方式",
+    method: "支付宝扫码付款",
+    qrSrc: salesContact.paymentQrSrc,
     copy: `${salesContact.paymentHint} 当前版本先走人工确认，暂不做自动扣款；这样更适合内测阶段收集真实反馈。`,
   };
   const orderTemplate = [

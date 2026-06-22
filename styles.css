@@ -466,6 +466,21 @@ button {
   background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
 }
 
+.card-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-headline > span:last-child {
+  color: #c2410c;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: right;
+}
+
 .offer-strip {
   display: grid;
   gap: 6px;
@@ -546,6 +561,41 @@ button {
   padding: 12px;
 }
 
+.payment-qr-box {
+  display: grid;
+  grid-template-columns: 118px 1fr;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  padding: 10px;
+}
+
+.payment-qr-box img {
+  width: 118px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  background: #fff;
+}
+
+.payment-qr-box span {
+  display: block;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.payment-qr-box p {
+  margin: 6px 0 0;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .purchase-box strong {
   color: #9a3412;
   font-size: 14px;
@@ -573,6 +623,39 @@ button {
   font-weight: 750;
   line-height: 1.6;
   padding: 10px;
+}
+
+.compact-section .action-text {
+  font-size: 17px;
+}
+
+.profile-display summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.profile-display summary::-webkit-details-marker {
+  display: none;
+}
+
+.profile-display summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-display summary strong {
+  font-size: 16px;
+}
+
+.profile-display summary em {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: normal;
+}
+
+.profile-display[open] {
+  display: grid;
+  gap: 14px;
 }
 
 .ai-reason-box,
