@@ -90,6 +90,7 @@ const defaultState = {
   recordInputText: "",
   recordProjectId: "",
   recordNotice: "",
+  diagnosisPurchaseStep: "free",
   lastCoachResponse: null,
   desktopMode: false,
   isPro: false,
@@ -837,6 +838,7 @@ function renderMePage() {
   const contentPack = buildContentStarterPack(profile, state.projects);
   const coachInsight = buildAICoachInsight();
   const paidReport = buildPaidDiagnosisReport();
+  const purchaseFlow = buildDiagnosisPurchaseFlow(paidReport);
   return `
     ${renderTopbar("我的", "设置与内测")}
     <section class="card">
@@ -878,8 +880,33 @@ function renderMePage() {
               <strong>${paidReport.summary}</strong>
               <span>付款后交付，不承诺收益，只交付诊断、计划和复核。</span>
             </div>
-            <div class="purchase-explainers">
-              ${paidReport.purchaseExplainers
+            <div class="diagnosis-flow">
+              <div class="flow-head">
+                <span>${purchaseFlow.title}</span>
+                <strong>${purchaseFlow.activeStep.title}</strong>
+              </div>
+              <div class="flow-steps">
+                ${purchaseFlow.steps
+                  .map(
+                    (step, index) => `
+                      <button class="flow-step ${purchaseFlow.activeStepId === step.id ? "active" : ""}" data-diagnosis-step="${step.id}">
+                        <span>${index + 1}</span>
+                        <strong>${step.title}</strong>
+                        <em>${step.cta}</em>
+                      </button>
+                    `,
+                  )
+                  .join("")}
+              </div>
+              <div class="flow-feedback">
+                <span>当前反馈</span>
+                <p>${purchaseFlow.activeStep.feedback}</p>
+              </div>
+            </div>
+            <details class="purchase-detail">
+              <summary>我想先看清楚：什么时候触发、什么时候购买、买后有什么</summary>
+              <div class="purchase-explainers">
+                ${paidReport.purchaseExplainers
                 .map(
                   (item) => `
                     <div>
@@ -889,11 +916,12 @@ function renderMePage() {
                   `,
                 )
                 .join("")}
-            </div>
+              </div>
+            </details>
             <div class="paid-deliverables">
               ${paidReport.deliverables.map((item) => `<div>${item}</div>`).join("")}
             </div>
-            <div class="purchase-box">
+            <div class="purchase-box ${purchaseFlow.activeStepId === "pay" ? "active" : ""}">
               <strong>${paidReport.payment.title}</strong>
               <div class="payment-qr-box">
                 <img src="${paidReport.payment.qrSrc}" alt="支付宝收款码" />
@@ -904,6 +932,10 @@ function renderMePage() {
               </div>
               <ol>${paidReport.purchaseSteps.map((item) => `<li>${item}</li>`).join("")}</ol>
               <div class="notice">${paidReport.payment.copy}</div>
+            </div>
+            <div class="purchase-box ${purchaseFlow.activeStepId === "submit" ? "active" : ""}">
+              <strong>提交资料</strong>
+              <div class="notice">付款后不要在系统里等自动扣款。复制下单资料，补完信息和付款截图，发给运营确认。</div>
               <pre class="order-template">${paidReport.orderTemplate}</pre>
             </div>
             <div class="button-row">
@@ -1487,6 +1519,10 @@ function bindEvents() {
     button.addEventListener("click", () => startCoachQuestion(button.dataset.coachQuestion));
   });
 
+  document.querySelectorAll("[data-diagnosis-step]").forEach((button) => {
+    button.addEventListener("click", () => setDiagnosisPurchaseStep(button.dataset.diagnosisStep));
+  });
+
   document.querySelectorAll("[data-example]").forEach((button) => {
     button.addEventListener("click", () => {
       const input = document.querySelector("#recordText");
@@ -1550,6 +1586,14 @@ function updateDraft(input) {
   const field = input.dataset.field;
   if (!state.draftRecords[index]) return;
   state.draftRecords[index][field] = field === "amount" ? Number(input.value) : input.value;
+}
+
+function setDiagnosisPurchaseStep(stepId) {
+  const validSteps = ["free", "decide", "pay", "submit", "deliver"];
+  if (!validSteps.includes(stepId)) return;
+  state.diagnosisPurchaseStep = stepId;
+  saveState();
+  render();
 }
 
 function handleAction(action) {
@@ -2209,6 +2253,52 @@ function buildPaidDiagnosisReport(profile = state.personalProfile || {}, project
     orderTemplate,
     boundary,
     copyText,
+  };
+}
+
+function buildDiagnosisPurchaseFlow(report = buildPaidDiagnosisReport(), activeStepId = state.diagnosisPurchaseStep || "free") {
+  const steps = [
+    {
+      id: "free",
+      title: "免费初诊已完成",
+      cta: "查看免费结果",
+      feedback: "你已经拿到基础画像、优先项目和今天行动。先不用付费，也可以直接继续记录。",
+    },
+    {
+      id: "decide",
+      title: "决定是否升级",
+      cta: "我想要更具体",
+      feedback: "如果你想知道第一批客户是谁、7天怎么推进、内容怎么发，再进入 9.9 元诊断。",
+    },
+    {
+      id: "pay",
+      title: "扫码付款 9.9",
+      cta: "下一步：扫码付款",
+      feedback: "使用支付宝扫码付款 9.9 元，付款完成后保留截图。",
+    },
+    {
+      id: "submit",
+      title: "提交资料和截图",
+      cta: "复制下单资料",
+      feedback: "复制下单资料，补充你的微信、目标、当前问题和付款截图，发给运营确认。",
+    },
+    {
+      id: "deliver",
+      title: "等待复核交付",
+      cta: "我已提交，等交付",
+      feedback: "收到资料后，AI 先生成初诊，我再人工复核，交付报告和 7 天行动计划。",
+    },
+  ];
+  const activeIndex = Math.max(0, steps.findIndex((step) => step.id === activeStepId));
+  const activeStep = steps[activeIndex] || steps[0];
+  return {
+    title: "诊断进度",
+    activeStepId: activeStep.id,
+    activeStep,
+    steps,
+    nextStep: steps[Math.min(activeIndex + 1, steps.length - 1)],
+    payment: report.payment,
+    orderTemplate: report.orderTemplate,
   };
 }
 
